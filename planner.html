@@ -168,6 +168,8 @@ textarea.in{resize:vertical;min-height:70px;line-height:1.5}
 .ex{font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;border:1px dashed var(--faint);border-radius:5px;padding:0 5px;color:var(--muted)}
 .secpill{font-family:var(--f-mono);font-size:10.5px;font-weight:500;border-radius:5px;padding:1px 5px;color:var(--surface)}
 .secpill.S1{background:var(--s1)} .secpill.S2{background:var(--s2)} .secpill.S3{background:var(--s3)}
+.evs{display:flex;flex-wrap:wrap;gap:6px}
+.ev{font-size:12px;border-radius:7px;padding:3px 8px;background:var(--sunk);border:1px dashed var(--faint);color:var(--ink);text-align:left}
 .carry{background:var(--bad-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
 .carry .chead{font-size:13px}
 .carry .task{border-color:color-mix(in oklch,var(--bad) 18%,transparent)}
@@ -234,7 +236,8 @@ textarea.in{resize:vertical;min-height:70px;line-height:1.5}
 
 /* plan */
 .week-wrap{overflow-x:auto;padding-bottom:8px}
-.week{display:grid;grid-template-columns:repeat(7,minmax(178px,1fr));gap:10px}
+.week{display:grid;grid-template-columns:repeat(7,minmax(124px,1fr));gap:8px}
+@media (max-width:899px){.week{grid-template-columns:repeat(7,minmax(168px,1fr))}}
 .wday{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .wday.today{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .wday .wh{display:flex;align-items:baseline;gap:8px;text-align:left}
@@ -831,9 +834,11 @@ function vToday() {
   const title = isT ? `${greet()}${name ? `, <em>${esc(name)}</em>` : ''}.` : esc(fmt(D, { weekday: 'long' })) + (D < T ? ' <em>past</em>' : '');
   const sub = [`<span><b>${done}</b> of ${list.length} tasks done</span>`, hs.length ? `<span><b>${hDone}/${hs.length}</b> habits</span>` : '', fm ? `<span><b>${fmtMin(fm)}</b> focused</span>` : '', left != null && left >= 0 ? `<span>GAMSAT in <b>${left}</b> days</span>` : ''].filter(Boolean).join('');
   const ex = S.core.settings.hasExamples ? `<div class="card flat" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--accent-soft);border-color:transparent"><span class="small">You're looking at <b>example content</b> so you can see how everything works. Items marked <span class="ex">example</span> go away in one tap.</span><button class="btn sm" data-act="clearEx">Clear examples</button></div>` : '';
+  const nextMon = addDays(mondayOf(T), 7), gs = S.core.settings.gamsat;
+  const planBanner = isT && (wd(T) === 0 || wd(T) === 6) && !(gs.imported && gs.imported[nextMon]) ? `<div class="card flat" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap"><span><b>It's the weekend.</b> <span class="muted">Plan next week (from ${fmtShort(nextMon)})${gs.planDoc ? ' from your Game Plan' : ''}.</span></span><button class="btn pri sm" data-act="impOpen">Plan my week</button></div>` : '';
   const cards = S.core.settings.cards.filter(c => c.on).map(c => CARD[c.id](D)).join('');
   return header(esc(fmtLong(D)) + (isT ? '' : ` · <button class="link" data-act="day" data-d="0">back to today</button>`), title, sub,
-    `${dateNav('day')}<input type="date" class="in" style="width:auto" value="${D}" data-ch="pickDay" aria-label="Pick a date"><button class="btn sm" data-act="go" data-v="settings">Customise</button>`) + ex + `<div class="cols">${cards}</div>`;
+    `${dateNav('day')}<input type="date" class="in" style="width:auto" value="${D}" data-ch="pickDay" aria-label="Pick a date"><button class="btn sm" data-act="go" data-v="settings">Customise</button>`) + planBanner + ex + `<div class="cols">${cards}</div>`;
 }
 function taskRow(t, o = {}) {
   const T = today(); const od = !t.done && t.date && t.date < T;
@@ -860,7 +865,8 @@ const CARD = {
       <div class="addrow"><input class="in" id="todo-add" placeholder="Add a task… try &quot;S3 flashcards 30m #gamsat&quot;" data-enter="addTodo"><button class="btn sm" data-act="addTodo">Add</button></div></section>`;
   },
   schedule(D) {
-    return `<section class="card"><div class="chead"><h3>Time blocks</h3><button class="link" data-act="blockNew" data-date="${D}">+ Block time</button></div>${timeline(D)}</section>`;
+    const ev = day(D).events || [];
+    return `<section class="card"><div class="chead"><h3>Time blocks</h3><button class="link" data-act="blockNew" data-date="${D}">+ Block time</button></div>${ev.length ? `<div class="evs">${ev.map(e => `<button class="ev" data-act="evDel" data-id="${e.id}" data-date="${D}" title="All day · tap to remove">${esc(e.t)}</button>`).join('')}</div>` : ''}${timeline(D)}</section>`;
   },
   habits(D) {
     const hs = S.core.habits.filter(h => !h.archived && habitDue(h, D));
@@ -884,6 +890,7 @@ const CARD = {
     return `<section class="card"><div class="chead"><h3>GAMSAT</h3><button class="link" data-act="go" data-v="gamsat">Study hub</button></div>
       <div class="row" style="justify-content:space-between;align-items:flex-end">${left != null ? `<div class="stat"><span class="big">${Math.max(0, left)}</span><span class="lab">days to go</span></div>` : `<button class="btn sm soft" data-act="go" data-v="gamsat">Set your test date</button>`}
       <div class="stat" style="text-align:right"><b>${gt.filter(t => t.done).length}/${gt.length}</b><span class="lab">study tasks today</span></div></div>
+      ${(() => { const wk = mondayOf(D), gl = goalFor(wk), m = focusIn(wk, addDays(wk, 6), f => !!f.sec); return gl ? `<div class="field" style="gap:4px"><div class="row small" style="justify-content:space-between"><span class="muted">This week</span><span>${fmtMin(m)} / ${gl}h</span></div><div class="bar"><i style="width:${Math.min(100, m / (gl * 60) * 100)}%"></i></div></div>` : ''; })()}
       ${od ? `<p class="small over">${od} overdue study task${od > 1 ? 's' : ''}</p>` : ''}
       ${due ? `<p class="small">${due} topic${due > 1 ? 's' : ''} due for review · <button class="link" data-act="go" data-v="gamsat">review now</button></p>` : ''}
       <div class="row">${['S1', 'S2', 'S3'].map(s => `<button class="btn sm" data-act="focusSec" data-sec="${s}"><span class="secpill ${s}">${s}</span> ${bySec(s) ? fmtMin(bySec(s)) : 'Start'}</button>`).join('')}</div></section>`;
@@ -959,6 +966,7 @@ function vPlan() {
       const bl = blocksOn(d), ts = sortTasks(tasksOn(d)); const pd_ = S.core.projects.filter(p => p.due === d && !p.done);
       return `<div class="wday ${d === T ? 'today' : ''}"><button class="wh" data-act="openDay" data-date="${d}"><b>${pd(d).getDate()}</b><span class="lab">${DOW[wd(d)]}</span></button>
         ${pd_.map(p => `<span class="due">Due: ${esc(p.title)}</span>`).join('')}
+        ${(day(d).events || []).map(e => `<button class="ev" data-act="evDel" data-id="${e.id}" data-date="${d}" title="All day · tap to remove">${esc(e.t)}</button>`).join('')}
         ${bl.map(b => { const c = catOf(b.cat); return `<button class="wb" style="--h:${c ? c.h : 260}" data-act="blockEdit" data-id="${b.id}" data-date="${d}" data-rec="${b.rec ? 1 : ''}"><small>${b.s}</small> ${esc(b.t)}</button>`; }).join('')}
         <ul class="tasks">${ts.map(t => taskRow(t, { star: false })).join('')}</ul>
         <input class="in" style="padding:6px 9px;font-size:13px" placeholder="+ Add" data-enter="addPlan" data-date="${d}"></div>`; }).join('')}</div></div>`;
@@ -975,7 +983,7 @@ function vPlan() {
         ${ts.slice(0, 3).map(t => { const c = catOf(t.cat); return `<span class="mt ${t.done ? 'dn' : ''}"><span class="dot" style="--h:${c ? c.h : 260}"></span>${esc(t.title)}</span>`; }).join('')}${ts.length > 3 ? `<span class="mt">+${ts.length - 3} more</span>` : ''}
         <span class="dots">${ts.slice(0, 6).map(t => { const c = catOf(t.cat); return `<span class="dot" style="--h:${c ? c.h : 260};width:6px;height:6px"></span>`; }).join('')}</span></button>`; }).join('')}</div>`;
   }
-  return header('Plan it once, it lands on the day', title, '', `<div class="chip-row"><button class="fchip ${UI.planMode === 'week' ? 'on' : ''}" data-act="pm" data-m="week">Week</button><button class="fchip ${UI.planMode === 'month' ? 'on' : ''}" data-act="pm" data-m="month">Month</button></div>${dateNav('planNav', UI.planMode === 'week' ? 'This week' : 'This month')}`) + body +
+  return header('Plan it once, it lands on the day', title, '', `<div class="chip-row"><button class="fchip ${UI.planMode === 'week' ? 'on' : ''}" data-act="pm" data-m="week">Week</button><button class="fchip ${UI.planMode === 'month' ? 'on' : ''}" data-act="pm" data-m="month">Month</button></div>${dateNav('planNav', UI.planMode === 'week' ? 'This week' : 'This month')}<button class="btn soft sm" data-act="impOpen">Plan my week</button>`) + body +
     `<p class="small muted">Tap a date to open that day. Recurring blocks (like lectures) are marked ↻ and set up from any block's edit sheet.</p>`;
 }
 
@@ -1007,7 +1015,7 @@ function topicDue(tp) { return addDays(tp.last || today(), REVIEW_GAP[tp.conf] |
 function vGamsat() {
   const T = today(), g = S.core.settings.gamsat; const left = g.date ? diffDays(T, g.date) : null;
   const ws = weekStartOf(T); const we = addDays(ws, 6);
-  const weekMin = focusIn(ws, T, f => !!f.sec); const target = g.weekTarget * 60;
+  const weekMin = focusIn(ws, T, f => !!f.sec); const wk = mondayOf(T); const goal = goalFor(wk); const target = goal * 60;
   const secMin = s => focusIn(ws, T, f => f.sec === s);
   const allMin = s => { let m = 0; for (const mo of Object.values(S.months)) for (const d of Object.values(mo.days)) for (const f of (d.focus || [])) if (!s ? f.sec : f.sec === s) m += f.min; return m; };
   const gts = S.tasks.list.filter(isGamsat);
@@ -1018,12 +1026,13 @@ function vGamsat() {
   const sc = S.core.scores.slice().sort((a, b) => a.date < b.date ? -1 : 1);
   const overall = s => (s.s1 != null && s.s2 != null && s.s3 != null && s.s1 !== '' && s.s2 !== '' && s.s3 !== '') ? Math.round((+s.s1 + +s.s2 + 2 * +s.s3) / 4 * 10) / 10 : null;
   return header('Study hub', 'GAMSAT', left != null ? `<span>Test day <b>${fmtLong(g.date)}</b></span><span><b>${fmtMin(allMin())}</b> logged in total</span>` : '<span>Add your sitting date to start the countdown.</span>',
-    `<button class="btn pri" data-act="focus">${ICON.timer} Start a study session</button>`) +
+    `<button class="btn soft" data-act="impOpen">Plan my week</button><button class="btn pri" data-act="focus">${ICON.timer} Start a study session</button>`) +
     `<div class="sec-grid">
       <section class="card flat"><div class="chead"><h3>Countdown</h3></div>
         <div class="row" style="justify-content:space-between;align-items:flex-end"><div class="stat"><span class="big">${left != null ? Math.max(0, left) : '—'}</span><span class="lab">days${left != null ? ` · ${Math.max(0, Math.floor(left / 7))} weeks` : ''}</span></div></div>
-        <div class="grid2"><div class="field"><span class="lab">Sitting date</span><input type="date" class="in" value="${g.date}" data-ch="gDate"></div><div class="field"><span class="lab">Weekly hours goal</span><input type="number" min="0" max="80" class="in" value="${g.weekTarget}" data-ch="gTarget"></div></div></section>
-      <section class="card flat"><div class="chead"><h3>This week</h3><span class="lab">${fmtMin(weekMin)} / ${g.weekTarget}h</span></div>
+        <div class="grid2"><div class="field"><span class="lab">Sitting date</span><input type="date" class="in" value="${g.date}" data-ch="gDate"></div><div class="field"><span class="lab">Default weekly goal (h)</span><input type="number" min="0" max="80" class="in" value="${g.weekTarget}" data-ch="gTarget"></div></div></section>
+      <section class="card flat"><div class="chead"><h3>This week</h3><span class="lab">${fmtMin(weekMin)} / ${goal}h</span></div>
+        <label class="row small"><span class="muted">This week's goal</span><input type="number" min="0" max="80" step="0.5" class="in" style="width:80px;padding:5px 8px" value="${goal}" data-ch="gWeekGoal" data-ws="${wk}"><span class="muted">hours${g.weekGoals && g.weekGoals[wk] != null ? '' : ' (default)'}</span></label>
         <div class="bar"><i style="width:${target ? Math.min(100, weekMin / target * 100) : 0}%"></i></div>
         ${['S1', 'S2', 'S3'].map(s => { const m = secMin(s); return `<div class="field" style="gap:4px"><div class="row" style="justify-content:space-between"><span class="small"><span class="secpill ${s}">${s}</span> ${SECS[s]}</span><span class="small muted" style="font-variant-numeric:tabular-nums">${fmtMin(m)}</span></div><div class="bar"><i style="width:${weekMin ? m / weekMin * 100 : 0}%;background:var(--${s.toLowerCase()})"></i></div></div>`; }).join('')}
         <button class="link" data-act="logStudy" style="align-self:flex-start">+ Log time studied without the timer</button></section>
@@ -1161,6 +1170,296 @@ function vSettings() {
       <ul class="small" style="display:flex;flex-direction:column;gap:4px"><li><b>today, tomorrow, fri, 12 oct, 12/10, in 3 days</b> sets the date</li><li><b>#uni</b> puts it in a list · <b>S1 / S2 / S3</b> tags a GAMSAT section</li><li><b>!1 !2 !3</b> sets priority · <b>45m</b> or <b>1.5h</b> sets a time estimate</li><li><b>@9am</b> or <b>@14:30</b> in Quick add as a time block</li></ul>
       <p class="small muted">On your phone: open this page, then Share → Add to Home Screen.</p></section>
   </div>`;
+}
+
+/* ============================== weekly Game Plan import ============================== */
+const GD = 'Google Drive';
+const goalFor = ws => { const g = S.core.settings.gamsat; return g.weekGoals && g.weekGoals[ws] != null ? g.weekGoals[ws] : g.weekTarget; };
+const mondayOf = s => addDays(s, -((wd(s) + 6) % 7));
+let IMP = null;          // import sheet state
+let PLAN_CACHE = null;   // { id, title, text, weeks } for this visit
+
+function planClean(c) { return c.replace(/\\/g, '').replace(/\*\*/g, '').replace(/&#10;/g, '\n').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/[ \t]+/g, ' ').trim(); }
+function planItems(str) {
+  return (str || '').split(/\n|(?:^|\s)-\s+/).map(x => x.replace(/^[\s\-–•]+/, '').trim()).filter(x => x.length > 1 && !/^(must do|do if time)\s*:?$/i.test(x));
+}
+function parseTaskList(txt) {
+  const body = ((txt.split(/Task list\s*:/i)[1]) || '').split(/Evaluation Tasks/i)[0];
+  const parts = body.split(/\bS([123])\s*:/); const out = {};
+  for (let i = 1; i < parts.length; i += 2) {
+    const sec = 'S' + parts[i], t = parts[i + 1] || '';
+    const o = out[sec] = out[sec] || { mode: '', must: [], ift: [] };
+    const mode = t.split(/Must do|Do if time/i)[0].replace(/[\s\-;]+$/, '').trim(); if (mode) o.mode = mode;
+    const mi = t.search(/Must do\s*:/i), di = t.search(/Do if time\s*:/i);
+    if (mi >= 0) o.must.push(...planItems(t.slice(mi).replace(/^Must do\s*:/i, '').split(/Do if time\s*:/i)[0]));
+    if (di >= 0) o.ift.push(...planItems(t.slice(di).replace(/^Do if time\s*:/i, '')));
+  }
+  return out;
+}
+function parseEvals(txt) {
+  const m = txt.split(/Evaluation Tasks\s*:?/i)[1]; if (!m) return [];
+  const items = planItems(m.split(/Pace for timed/i)[0]); const out = []; let head = '';
+  items.forEach((it, i) => {
+    const next = items[i + 1] || '';
+    if (/:$/.test(it)) { head = it.replace(/:$/, ''); return; }
+    if (/^S[123]$/.test(next) && !/^S[123]\b/.test(it)) { head = it; return; }
+    const sm = it.match(/^S([123])\s*:?\s*(.*)$/);
+    if (sm) out.push({ sec: 'S' + sm[1], title: `${head ? head + ' · ' : ''}S${sm[1]}${sm[2] ? ': ' + sm[2] : ''}` });
+    else out.push({ sec: '', title: it });
+  });
+  return out;
+}
+function to24(h, m) { return h * 60 + (m || 0); }
+function parseRange(str) {
+  const m = str.match(/(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?\s*[-–]\s*(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?/i); if (!m) return null;
+  let sh = +m[1], eh = +m[4]; const sm = +(m[2] || 0), em = +(m[5] || 0);
+  if (sh > 23 || eh > 24) return null;
+  if (m[3] && /pm/i.test(m[3]) && sh < 12) sh += 12; else if (!m[3] && sh < 7) sh += 12;
+  if (m[6] && /pm/i.test(m[6]) && eh < 12) eh += 12;
+  if (to24(eh, em) <= to24(sh, sm)) eh += 12;
+  const s = to24(sh, sm), e = Math.min(to24(eh, em), 23 * 60 + 59); if (e <= s) return null;
+  return { s: toTime(s), e: toTime(e), rest: str.replace(m[0], ' ').replace(/\s+/g, ' ').trim() };
+}
+function parseDayCell(txt) {
+  const out = { events: [], blocks: [], tasks: [] };
+  let t = (txt || '').replace(/⭐/g, ' ');
+  if (/SCAFFOLD/i.test(t)) { out.tasks.push({ title: 'Scaffold: review this week & plan next', est: 30, kind: 'scaffold' }); t = t.replace(/SCAFFOLD/ig, ' '); }
+  if (/PRE-EXAM BRIEF/i.test(t)) { out.tasks.push({ title: 'Pre-exam brief', est: 30, kind: 'fixed' }); t = t.replace(/PRE-EXAM BRIEF/ig, ' '); }
+  for (let p of t.split(/\n|(?=S[123]\s)/)) {
+    p = p.replace(/\s+/g, ' ').trim(); if (!p || p.length < 2) continue;
+    const sm = p.match(/^S([123])\b/);
+    const r = parseRange(p);
+    if (sm) out.tasks.push({ title: p, sec: 'S' + sm[1], kind: 'fixed' });
+    else if (r) out.blocks.push({ t: r.rest || p, s: r.s, e: r.e });
+    else out.events.push({ t: p });
+  }
+  return out;
+}
+function parseGamePlan(text) {
+  const weeks = [];
+  for (const line of text.split('\n')) {
+    if (!/^\s*\|/.test(line)) continue;
+    const cells = line.trim().replace(/^\|/, '').replace(/\|\s*$/, '').split('|').map(planClean);
+    if (cells.length < 10) continue;
+    const m = cells[0].match(/\bWeek\s*(\d+)/i); if (!m) continue;
+    const w = { n: +m[1] };
+    const dm = cells[0].match(/Date\s*:?\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i);
+    if (dm) w.dateText = dm[0].replace(/^Date\s*:?\s*/i, '');
+    if (dm && +dm[2] >= 1 && +dm[2] <= 12) { let y = +dm[3]; if (y < 100) y += 2000; const d = new Date(y, +dm[2] - 1, +dm[1]); if (d.getMonth() === +dm[2] - 1) w.parsed = ymd(d); }
+    w.phase = [...cells[0].matchAll(/Phase\s*(\d+)\s*-\s*([A-Za-z ]+?)(?=\s*(?:-\s*\d|Phase|Task list|\n|$))/gi)].map(x => `Phase ${x[1]}: ${x[2].trim()}`).join(' → ');
+    const hp = parseFloat(cells[1]); w.hpw = isNaN(hp) ? null : hp;
+    w.days = cells.slice(3, 10).map(parseDayCell);
+    w.sections = parseTaskList(cells[0]);
+    w.evals = parseEvals(cells[0]);
+    weeks.push(w);
+  }
+  const anchor = weeks.find(w => w.parsed && wd(w.parsed) === 1);
+  for (const w of weeks) { w.start = anchor ? addDays(anchor.parsed, 7 * (w.n - anchor.n)) : (w.parsed ? mondayOf(w.parsed) : null); w.mismatch = !!(w.dateText && w.start && w.parsed !== w.start); }
+  return weeks.filter(w => w.start);
+}
+/* free-form fallback: one line per item, e.g. "Mon 8-5 Placement", "Tue S3 maths review 60m" */
+function parseLines(text, ws) {
+  const w = { n: 0, start: ws, hpw: null, phase: '', days: Array.from({ length: 7 }, () => ({ events: [], blocks: [], tasks: [] })), sections: {}, evals: [], loose: [] };
+  for (let line of text.split('\n')) {
+    line = line.replace(/^[\s\-•*]+/, '').trim(); if (!line) continue;
+    const hm = line.match(/^(?:goal|hpw|hours)\s*:?\s*(\d+(?:\.\d+)?)/i); if (hm) { w.hpw = +hm[1]; continue; }
+    const dm = line.match(/^(mon|tue|wed|thu|fri|sat|sun)[a-z]*[:\s,-]+(.*)$/i);
+    const rest = dm ? dm[2] : line;
+    const di = dm ? ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].indexOf(dm[1].slice(0, 3).toLowerCase()) : -1;
+    let text = rest; const em = text.match(/(?:^|\s)(\d+(?:\.\d+)?)\s?(m|min|mins|h|hr|hrs)\b/i); const est = em ? Math.round(/^h/i.test(em[2]) ? em[1] * 60 : +em[1]) : 0;
+    if (em) text = text.replace(em[0], ' ').trim();
+    const r = parseRange(text); if (r) text = r.rest || text;
+    const secM = text.match(/\bS([123])\b/); const sec = secM ? 'S' + secM[1] : '';
+    const isStudy = !!sec || /study|revis|practice|essay|read|drill|flashcard|anki|review|chp|chapter/i.test(text);
+    if (di < 0) { w.loose.push({ title: text, sec, est }); continue; }
+    const d = w.days[di];
+    if (isStudy) d.tasks.push({ title: text, sec, est: est || (r ? toMin(r.e) - toMin(r.s) : 0), kind: 'fixed', at: r ? [r.s, r.e] : null, estLocked: !!(est || r) });
+    else if (r) d.blocks.push({ t: text, s: r.s, e: r.e });
+    else d.events.push({ t: text });
+  }
+  return w;
+}
+
+function blockCat(t) { if (/placement|clinic|client/i.test(t)) return catOf('clinic') ? 'clinic' : ''; if (/uni|lecture|tute|exam|class/i.test(t)) return catOf('uni') ? 'uni' : ''; if (/gym|pilates|run|walk|yoga|health|doctor|gp\b/i.test(t)) return catOf('health') ? 'health' : ''; return catOf('life') ? 'life' : ''; }
+const estFor = t => /mock|practice test|online test|prep test|test [ab]\b/i.test(t) ? 150 : /2\s*x\s*timed essay/i.test(t) ? 70 : /timed essay/i.test(t) ? 35 : 0;
+
+function buildImport(w) {
+  const rows = [];
+  const G = gamsatCat() ? gamsatCat().id : '';
+  w.days.forEach((d, i) => {
+    d.events.forEach(e => rows.push({ id: uid(), kind: 'event', group: 'Commitments', day: i, title: e.t, on: true }));
+    d.blocks.forEach(b => rows.push({ id: uid(), kind: 'block', group: 'Commitments', day: i, title: b.t, s: b.s, e: b.e, cat: blockCat(b.t), on: true }));
+    d.tasks.forEach(t => rows.push({ id: uid(), kind: 'task', group: t.kind === 'scaffold' ? 'Planning' : 'Set days', day: i, title: t.title, sec: t.sec || '', est: t.est || 0, at: t.at || null, estLocked: !!t.estLocked, study: t.kind !== 'scaffold', fixed: true, on: true, cat: G }));
+  });
+  for (const sec of ['S1', 'S2', 'S3']) {
+    const s = w.sections[sec]; if (!s) continue;
+    s.must.forEach(it => rows.push({ id: uid(), kind: 'task', group: 'Must do', day: null, title: /^S[123]\b/.test(it) ? it : `${sec}: ${it}${s.mode ? ` (${s.mode.toLowerCase()})` : ''}`, sec, est: estFor(it), study: true, on: true, cat: G }));
+    s.ift.forEach(it => rows.push({ id: uid(), kind: 'task', group: 'Do if time', day: null, title: `${sec}: ${it}`, sec, est: estFor(it), study: true, on: false, pri: 1, cat: G }));
+  }
+  w.evals.forEach(e => rows.push({ id: uid(), kind: 'task', group: 'Evaluation', day: null, title: e.title, sec: e.sec, est: estFor(e.title) || 60, study: true, on: true, pri: 2, cat: G }));
+  (w.loose || []).forEach(l => rows.push({ id: uid(), kind: 'task', group: 'Must do', day: null, title: l.title, sec: l.sec, est: l.est, estLocked: !!l.est, study: true, on: true, cat: G }));
+  IMP.rows = rows; IMP.hpw = w.hpw; IMP.week = w; IMP.setGoal = w.hpw != null; IMP.block = true;
+  shareMinutes();
+}
+/* split the week's hours across study tasks that have no fixed length */
+function shareMinutes() {
+  const study = IMP.rows.filter(r => r.kind === 'task' && r.study && r.on);
+  const fixedMin = study.filter(r => r.estLocked || estFor(r.title)).reduce((a, r) => a + r.est, 0);
+  const flex = study.filter(r => !r.estLocked && !estFor(r.title));
+  const total = IMP.hpw ? IMP.hpw * 60 : 0;
+  const each = flex.length ? Math.min(180, Math.max(30, Math.round(Math.max(0, total - fixedMin) / flex.length / 15) * 15 || 45)) : 0;
+  for (const r of flex) r.est = total ? each : (r.est || 45);
+}
+/* assign days + times; returns the plan without touching state */
+function planImport() {
+  const ws = IMP.week.start, st = S.core.settings;
+  const dates = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+  const busy = dates.map((d, i) => {
+    const keep = blocksOn(d).filter(b => !(IMP.replace && b.imp === ws));
+    return [...keep.map(b => [toMin(b.s), toMin(b.e)]), ...IMP.rows.filter(r => r.on && r.kind === 'block' && r.day === i).map(r => [toMin(r.s), toMin(r.e)]), ...IMP.rows.filter(r => r.on && r.at && r.day === i).map(r => [toMin(r.at[0]), toMin(r.at[1])])];
+  });
+  const hasEvent = dates.map((d, i) => IMP.rows.some(r => r.on && r.kind === 'event' && r.day === i) || (day(d).events || []).some(e => !(IMP.replace && e.imp === ws)));
+  const free = i => { const bs = busy[i].slice().sort((a, b) => a[0] - b[0]); const out = []; let cur = st.dayStart * 60; const end = st.dayEnd * 60;
+    for (const [s, e] of bs) { if (s - cur >= 20) out.push([cur, s]); cur = Math.max(cur, e + (e - s >= 180 ? 30 : 10)); } if (end - cur >= 20) out.push([cur, end]); return out; };
+  const cap = dates.map((d, i) => { const f = free(i).reduce((a, [s, e]) => a + (e - s), 0); return hasEvent[i] ? Math.round(f * 0.25) : f; });
+  const load = dates.map(() => 0);
+  const rows = IMP.rows.filter(r => r.on && r.kind === 'task');
+  for (const r of rows) if (r.day != null) load[r.day] += r.est || 0;
+  const auto = rows.filter(r => r.day == null).sort((a, b) => (b.est || 0) - (a.est || 0));
+  const assigned = {};
+  for (const r of auto) {
+    let best = -1, bestRoom = -Infinity;
+    for (let i = 0; i < 7; i++) { if (dates[i] < today()) continue; const room = cap[i] - load[i]; if (room > bestRoom) { bestRoom = room; best = i; } }
+    if (best < 0) best = 6;
+    assigned[r.id] = best; load[best] += r.est || 0;
+  }
+  const times = {};
+  if (IMP.block) for (let i = 0; i < 7; i++) {
+    const slots = free(i).map(x => x.slice());
+    for (const r of rows.filter(r => r.at && r.day === i)) times[r.id] = r.at;
+    for (const r of rows.filter(r => (r.day ?? assigned[r.id]) === i && r.study && r.est && !r.at)) {
+      const EARLY = 9 * 60;
+      let k = slots.findIndex(([s, e]) => e - Math.max(s, EARLY) >= r.est), s;
+      if (k >= 0) s = Math.max(slots[k][0], EARLY); else { k = slots.findIndex(([a, e]) => e - a >= r.est); if (k < 0) continue; s = slots[k][0]; } times[r.id] = [toTime(s), toTime(s + r.est)]; if (s === slots[k][0]) slots[k][0] = s + r.est + 10; else slots.splice(k + 1, 0, [s + r.est + 10, slots[k][1]]), slots[k][1] = s;
+    }
+  }
+  return { dates, assigned, times, cap, load };
+}
+function importSheet() {
+  const T = today();
+  if (!IMP) IMP = { mode: 'doc', week: null, rows: [], replace: true, status: '', busy: false };
+  const g = S.core.settings.gamsat;
+  const doc = g.planDoc;
+  let head = sheetHead('Plan my week');
+  let body = '';
+  const tabs = `<div class="chip-row"><button class="fchip ${IMP.mode === 'doc' ? 'on' : ''}" data-act="impMode" data-m="doc">From my Google Doc</button><button class="fchip ${IMP.mode === 'paste' ? 'on' : ''}" data-act="impMode" data-m="paste">Paste a list</button></div>`;
+  if (IMP.mode === 'doc') {
+    if (!doc) {
+      body = `<p class="small muted">Link your Game Plan once. Each week you pick the week and it lands here as tasks and time blocks.</p>
+        <div class="row"><button class="btn pri" data-act="impFind" ${IMP.busy ? 'disabled' : ''}>${IMP.busy ? 'Searching…' : 'Find my Game Plan in Google Drive'}</button></div>
+        ${IMP.found ? `<div class="res">${IMP.found.map(f => `<button data-act="impPick" data-id="${esc(f.id)}" data-t="${esc(f.title)}"><span class="k">doc</span><span>${esc(f.title)}<br><span class="small muted">edited ${esc((f.modifiedTime || '').slice(0, 10))}</span></span></button>`).join('') || '<p class="empty">No matching docs found.</p>'}</div>` : ''}`;
+    } else if (!PLAN_CACHE || PLAN_CACHE.id !== doc.id) {
+      body = `<p class="small">Linked: <b>${esc(doc.title)}</b> · <button class="link" data-act="impUnlink">change</button></p><div class="row"><button class="btn pri" data-act="impLoad" ${IMP.busy ? 'disabled' : ''}>${IMP.busy ? 'Reading your doc…' : 'Read my plan'}</button></div>`;
+    } else {
+      const weeks = PLAN_CACHE.weeks;
+      if (!IMP.week) { const target = wd(T) === 0 || wd(T) === 6 ? addDays(mondayOf(T), 7) : mondayOf(T); IMP.pickN = (weeks.find(w => w.start === target) || weeks.find(w => w.start > T) || weeks[weeks.length - 1] || {}).n; }
+      body = `<p class="small">Linked: <b>${esc(doc.title)}</b> · <button class="link" data-act="impLoad">refresh</button> · <button class="link" data-act="impUnlink">change doc</button></p>
+        <div class="row"><select class="in" id="imp-week" style="flex:1">${weeks.map(w => `<option value="${w.n}" ${w.n === IMP.pickN ? 'selected' : ''}>Week ${w.n} · ${fmtShort(w.start)} – ${fmtShort(addDays(w.start, 6))}${w.hpw != null ? ` · ${w.hpw}h` : ''}${g.imported && g.imported[w.start] ? ' · imported' : ''}</option>`).join('')}</select><button class="btn soft" data-act="impWeek">${IMP.week ? 'Reload week' : 'Preview week'}</button></div>`;
+    }
+  } else {
+    const ws = IMP.pasteWs || (wd(T) === 0 || wd(T) === 6 ? addDays(mondayOf(T), 7) : mondayOf(T));
+    body = `<p class="small muted">One item per line, starting with the day. Add a <b>Goal: 12</b> line for the week's hours. Lines with no day get spread across the week.</p>
+      <div class="field"><span class="lab">Week starting (Monday)</span><input type="date" class="in" id="imp-ws" value="${ws}"></div>
+      <textarea class="in" id="imp-text" rows="7" placeholder="Goal: 12&#10;Mon 8-5 Placement&#10;Tue S3 maths content review 60m&#10;Wed 6-8pm S2 timed essay&#10;Sat Japan holiday&#10;S1 Des chp 3">${esc(IMP.pasteText || '')}</textarea>
+      <div class="row"><button class="btn soft" data-act="impPaste">Preview week</button></div>`;
+  }
+  if (IMP.status) body += `<p class="small ${IMP.statusBad ? 'over' : 'muted'}">${esc(IMP.status)}</p>`;
+  if (IMP.week) body += importPreview();
+  openSheet(head + tabs + body, { wide: true });
+}
+function importPreview() {
+  const w = IMP.week, ws = w.start, P = planImport();
+  const DN = i => fmt(P.dates[i], { weekday: 'short', day: 'numeric' });
+  const daySel = r => `<select class="in" style="padding:5px 26px 5px 8px;font-size:13px;min-width:118px" data-ch="impDay" data-id="${r.id}">${r.day == null ? `<option value="" selected>Auto: ${DN(P.assigned[r.id] ?? 0)}</option>` : '<option value="">Auto</option>'}${P.dates.map((d, i) => `<option value="${i}" ${r.day === i ? 'selected' : ''}>${DN(i)}</option>`).join('')}</select>`;
+  const groups = ['Commitments', 'Set days', 'Must do', 'Evaluation', 'Do if time', 'Planning'];
+  const already = S.core.settings.gamsat.imported && S.core.settings.gamsat.imported[ws];
+  const studyMin = IMP.rows.filter(r => r.on && r.kind === 'task' && r.study).reduce((a, r) => a + (r.est || 0), 0);
+  const unplaced = IMP.block ? IMP.rows.filter(r => r.on && r.kind === 'task' && r.study && r.est && !P.times[r.id]).length : 0;
+  return `<div class="card flat" style="gap:10px;background:var(--sunk)"><div class="row" style="justify-content:space-between"><b>Week ${w.n || ''} · ${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))}</b>${w.phase ? `<span class="small muted">${esc(w.phase)}</span>` : ''}</div>
+    ${w.mismatch ? `<p class="small over">Your doc says this week starts “${esc(w.dateText)}”. Going by the week number, I've used ${fmt(ws, { day: 'numeric', month: 'short', year: 'numeric' })}. You may want to fix the date in the doc.</p>` : ''}
+    <label class="row small"><input type="checkbox" id="imp-goal" ${IMP.setGoal ? 'checked' : ''} data-ch="impGoal"> Set this week's study goal to <input type="number" min="0" max="80" step="0.5" class="in" style="width:80px;padding:4px 8px" value="${IMP.hpw ?? ''}" data-ch="impHpw"> hours ${IMP.hpw == null ? '<span class="muted">(no HPW in the doc)</span>' : ''}</label>
+    <label class="row small"><input type="checkbox" ${IMP.block ? 'checked' : ''} data-ch="impBlock"> Block time for study tasks in my free time (${pad(S.core.settings.dayStart)}:00–${pad(S.core.settings.dayEnd)}:00)</label>
+    ${already ? `<label class="row small"><input type="checkbox" ${IMP.replace ? 'checked' : ''} data-ch="impReplace"> Replace what I imported for this week before (keeps anything you've ticked off)</label>` : ''}
+    <p class="small">${fmtMin(studyMin)} of study planned${IMP.hpw ? ` against a ${IMP.hpw}h goal` : ''}${unplaced ? ` · <span class="over">${unplaced} task${unplaced > 1 ? 's' : ''} didn't fit in free time and will be added without a time block</span>` : ''}.</p></div>
+    ${groups.map(gname => { const rs = IMP.rows.filter(r => r.group === gname); if (!rs.length) return '';
+      return `<div class="field" style="gap:4px"><span class="lab">${gname}${gname === 'Do if time' ? ' · tick the ones you want' : ''}</span><div class="table-wrap"><table class="tbl"><tbody>${rs.map(r => {
+        const when = r.kind === 'block' ? `${r.s}–${r.e}` : r.kind === 'event' ? 'all day' : P.times[r.id] ? `${P.times[r.id][0]}–${P.times[r.id][1]}` : r.est ? 'no slot' : '';
+        return `<tr style="${r.on ? '' : 'opacity:.55'}"><td style="width:28px"><input type="checkbox" ${r.on ? 'checked' : ''} data-ch="impOn" data-id="${r.id}" aria-label="Include"></td><td style="min-width:200px">${secPill(r.sec)} ${esc(r.title)}</td><td>${daySel(r)}</td><td style="white-space:nowrap">${r.kind === 'task' ? `<input type="number" min="0" step="15" class="in" style="width:70px;padding:4px 8px" value="${r.est || ''}" data-ch="impEst" data-id="${r.id}" aria-label="Minutes"> m` : ''}</td><td class="small muted" style="white-space:nowrap">${when}</td></tr>`; }).join('')}</tbody></table></div></div>`; }).join('')}
+    <div class="row" style="justify-content:flex-end"><button class="btn" data-act="close">Cancel</button><button class="btn pri" data-act="impCreate">Add to my week</button></div>`;
+}
+async function mcpCall(tool, input) {
+  const mcp = window.claude && window.claude.use ? await window.claude.use('mcp') : null;
+  if (!mcp) throw { code: 'not_granted' };
+  const res = await mcp.callTool(GD, tool, input, { cache: false });
+  let p = res && res.payload !== undefined ? res.payload : res;
+  if (typeof p === 'string') { try { p = JSON.parse(p); } catch (e) {} }
+  return p;
+}
+function mcpErr(e) {
+  const c = e && e.code;
+  return { server_not_connected: 'Google Drive isn\'t connected. Add it in claude.ai Settings → Connectors, then try again. Or use "Paste a list".',
+    needs_reauth: 'Google Drive needs reconnecting. Reconnect it in claude.ai Settings → Connectors, then try again.',
+    selection_required: 'You have more than one Google Drive connected. Choose one when Claude asks, then try again.',
+    not_in_manifest: 'Google Drive access is switched off for this planner. Allow it from the page\'s permissions, or use "Paste a list".',
+    blocked_by_policy: 'Your organisation blocks Google Drive here. Use "Paste a list" instead.',
+    server_unavailable: 'Google Drive didn\'t answer. Try again in a moment.',
+    not_granted: 'Google Drive can\'t be reached from this view. Open the planner on claude.ai, or use "Paste a list".',
+    capability_disabled: 'Google Drive can\'t be reached from this view. Open the planner on claude.ai, or use "Paste a list".',
+    tool_error: 'Google Drive said: ' + ((e && e.message) || 'the file could not be read') }[c] || 'Something went wrong reaching Google Drive' + (e && e.message ? ': ' + e.message : '.') + ' Try again, or use "Paste a list".';
+}
+async function impFind() {
+  IMP.busy = true; IMP.status = ''; importSheet();
+  try {
+    const p = await mcpCall('search_files', { query: "mimeType = 'application/vnd.google-apps.document' and (title contains 'Game Plan' or title contains 'GAMSAT' or title contains 'Study Plan')", pageSize: 10, excludeContentSnippets: true });
+    IMP.found = ((p && p.files) || []).map(f => ({ id: f.id, title: f.title || f.name || 'Untitled', modifiedTime: f.modifiedTime }));
+  } catch (e) { IMP.status = mcpErr(e); IMP.statusBad = true; }
+  IMP.busy = false; if ($('#sheet').innerHTML) importSheet();
+}
+async function impLoad() {
+  const doc = S.core.settings.gamsat.planDoc; if (!doc) return;
+  IMP.busy = true; IMP.status = ''; IMP.week = null; importSheet();
+  try {
+    const p = await mcpCall('read_file_content', { fileId: doc.id });
+    const text = (p && (p.fileContent || p.content || p.text)) || (typeof p === 'string' ? p : '');
+    const weeks = parseGamePlan(text);
+    if (!weeks.length) { IMP.status = "I couldn't find any week rows in that doc. It needs the Game Plan table with a Week 1, Week 2… column. Try \"Paste a list\" instead."; IMP.statusBad = true; }
+    else { PLAN_CACHE = { id: doc.id, title: doc.title, weeks }; IMP.status = `Found ${weeks.length} weeks.`; IMP.statusBad = false; }
+  } catch (e) { IMP.status = mcpErr(e); IMP.statusBad = true; }
+  IMP.busy = false; if ($('#sheet').innerHTML) importSheet();
+}
+function impCreate() {
+  const w = IMP.week, ws = w.start, P = planImport(); const g = S.core.settings.gamsat; const keys = new Set(['tasks', 'core']);
+  if (IMP.replace) {
+    S.tasks.list = S.tasks.list.filter(t => !(t.imp === ws && !t.done));
+    for (let i = 0; i < 7; i++) { const d = addDays(ws, i), dd = day(d); if (dd === EMPTY) continue;
+      if (dd.blocks) dd.blocks = dd.blocks.filter(b => b.imp !== ws); if (dd.events) dd.events = dd.events.filter(e => e.imp !== ws); keys.add(dayKey(d)); }
+  }
+  let nT = 0, nB = 0;
+  for (const r of IMP.rows.filter(r => r.on)) {
+    const i = r.day ?? P.assigned[r.id] ?? 0; const d = P.dates[i];
+    if (r.kind === 'event') { const dd = day(d, true); (dd.events = dd.events || []).push({ id: uid(), t: r.title, imp: ws }); keys.add(dayKey(d)); }
+    else if (r.kind === 'block') { const dd = day(d, true); (dd.blocks = dd.blocks || []).push({ id: uid(), s: r.s, e: r.e, t: r.title, cat: r.cat || '', imp: ws }); keys.add(dayKey(d)); nB++; }
+    else {
+      const t = newTask({ title: r.title, date: d, cat: r.study ? (r.cat || '') : (gamsatCat() ? gamsatCat().id : ''), sec: r.sec || '', est: r.est || 0, pri: r.pri || 0, imp: ws });
+      S.tasks.list.push(t); nT++;
+      if (P.times[r.id]) { const dd = day(d, true); (dd.blocks = dd.blocks || []).push({ id: uid(), s: P.times[r.id][0], e: P.times[r.id][1], t: r.title, cat: t.cat, imp: ws, taskId: t.id }); keys.add(dayKey(d)); nB++; }
+    }
+  }
+  if (IMP.setGoal && IMP.hpw != null) { g.weekGoals = g.weekGoals || {}; g.weekGoals[ws] = IMP.hpw; }
+  g.imported = g.imported || {}; g.imported[ws] = Date.now();
+  IMP.week = null; touch(...keys); closeSheet();
+  UI.view = 'plan'; UI.planMode = 'week'; UI.planDate = ws; render();
+  toast(`Added ${nT} tasks and ${nB} time blocks for the week of ${fmtShort(ws)}`);
 }
 
 const VIEWS = { today: vToday, tasks: vTasks, plan: vPlan, projects: vProjects, gamsat: vGamsat, habits: vHabits, reflect: vReflect, wellness: vWellness, settings: vSettings };
@@ -1473,6 +1772,16 @@ const ACT = {
   essaySave: el => { const r = $('#es-r .on'); const e = { date: val('es-d') || today(), task: val('es-t'), theme: val('es-th').trim(), min: +val('es-m') || 0, words: +val('es-w') || 0, rating: r ? +r.dataset.v : 0, fix: val('es-f').trim() }; const id = el.dataset.id; if (id) Object.assign(S.core.essays.find(x => x.id === id), e); else S.core.essays.push({ id: uid(), ...e }); touch('core'); closeSheet(); },
   essayDel: el => { closeSheet(); withUndo('Essay deleted', ['core'], () => { S.core.essays = S.core.essays.filter(x => x.id !== el.dataset.id); commit('core'); }); },
   logStudy: () => logStudySheet(),
+  impOpen: () => { IMP = null; importSheet(); },
+  impMode: el => { IMP.mode = el.dataset.m; IMP.week = null; IMP.status = ''; importSheet(); },
+  impFind: () => impFind(),
+  impPick: el => { S.core.settings.gamsat.planDoc = { id: el.dataset.id, title: el.dataset.t }; touch('core'); IMP.found = null; impLoad(); },
+  impUnlink: () => { S.core.settings.gamsat.planDoc = null; PLAN_CACHE = null; IMP.week = null; IMP.status = ''; touch('core'); impFind(); },
+  impLoad: () => impLoad(),
+  impWeek: () => { const n = +val('imp-week'); const w = PLAN_CACHE.weeks.find(x => x.n === n); if (!w) return; IMP.pickN = n; IMP.status = ''; IMP.replace = true; buildImport(w); importSheet(); },
+  impPaste: () => { const ws = mondayOf(val('imp-ws') || today()); IMP.pasteWs = ws; IMP.pasteText = val('imp-text'); if (!IMP.pasteText.trim()) return; IMP.replace = true; buildImport(parseLines(IMP.pasteText, ws)); if (!IMP.rows.length) { IMP.week = null; IMP.status = 'Nothing to add. Put one item per line, e.g. "Tue S3 maths review 60m".'; IMP.statusBad = true; } importSheet(); },
+  impCreate: () => impCreate(),
+  evDel: el => withUndo('All-day note removed', [dayKey(el.dataset.date)], () => { const dd = day(el.dataset.date, true); dd.events = (dd.events || []).filter(e => e.id !== el.dataset.id); commit(dayKey(el.dataset.date)); }),
   logStudySave: () => { const m = +val('ls-m'); if (!m) return; logFocus(val('ls-d') || today(), m, val('ls-s'), val('ls-l')); closeSheet(); toast(`${fmtMin(m)} logged`); },
   focus: () => focusSheet(),
   focusSec: el => { F.sec = el.dataset.sec; focusSheet(); },
@@ -1512,6 +1821,14 @@ const CH = {
     if (f === 'sec' && v && !t.cat && gamsatCat()) t.cat = gamsatCat().id;
     touch('tasks'); pendingRender = true; },
   gDate: el => { S.core.settings.gamsat.date = el.value; commit('core'); },
+  gWeekGoal: el => { const g = S.core.settings.gamsat; g.weekGoals = g.weekGoals || {}; g.weekGoals[el.dataset.ws] = clamp(+el.value || 0, 0, 80); commit('core'); },
+  impOn: el => { const r = IMP.rows.find(x => x.id === el.dataset.id); r.on = el.checked; shareMinutes(); importSheet(); },
+  impDay: el => { const r = IMP.rows.find(x => x.id === el.dataset.id); r.day = el.value === '' ? null : +el.value; importSheet(); },
+  impEst: el => { const r = IMP.rows.find(x => x.id === el.dataset.id); r.est = Math.max(0, +el.value || 0); r.estLocked = true; shareMinutes(); importSheet(); },
+  impHpw: el => { IMP.hpw = el.value === '' ? null : clamp(+el.value, 0, 80); IMP.setGoal = IMP.hpw != null; shareMinutes(); importSheet(); },
+  impGoal: el => { IMP.setGoal = el.checked; },
+  impBlock: el => { IMP.block = el.checked; importSheet(); },
+  impReplace: el => { IMP.replace = el.checked; importSheet(); },
   gTarget: el => { S.core.settings.gamsat.weekTarget = clamp(+el.value || 0, 0, 80); commit('core'); },
   catName: el => { const c = catOf(el.dataset.id); if (c && el.value.trim()) { c.name = el.value.trim(); commit('core'); } },
   setName: el => { S.core.settings.name = el.value.trim(); commit('core'); },
