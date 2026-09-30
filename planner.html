@@ -614,7 +614,9 @@ const gamsatCat = () => cats().find(c => c.id === 'gamsat') || cats().find(c => 
 const catChip = id => { const c = catOf(id); return c ? `<span class="cat" style="--h:${c.h}">${esc(c.name)}</span>` : ''; };
 const secPill = s => s ? `<span class="secpill ${s}">${s}</span>` : '';
 const tasksOn = d => S.tasks.list.filter(t => t.date === d);
-const overdue = () => { const T = today(); return S.tasks.list.filter(t => !t.done && t.date && t.date < T); };
+/* late = its day has passed, or (no day set) its "due by" deadline has passed */
+const isLate = (t, T = today()) => !t.done && (t.date ? t.date < T : !!(t.due && t.due < T));
+const overdue = () => { const T = today(); return S.tasks.list.filter(t => isLate(t, T)); };
 const isGamsat = t => t.sec || (gamsatCat() && t.cat === gamsatCat().id);
 function sortTasks(a) { return a.slice().sort((x, y) => (x.done - y.done) || ((y.pri || 0) - (x.pri || 0)) || ((x.date || '9') < (y.date || '9') ? -1 : (x.date || '9') > (y.date || '9') ? 1 : 0) || (x.created - y.created)); }
 
@@ -824,7 +826,7 @@ function normalise() {
   if (!S.tasks) S.tasks = { _u: 0, list: [] };
   if (!S.res || !Array.isArray(S.res.list)) S.res = { _u: 0, list: [] };
   if (!Array.isArray(S.tasks.list)) S.tasks.list = [];
-  for (const t of S.tasks.list) { if (!Array.isArray(t.subs)) t.subs = []; }
+  for (const t of S.tasks.list) { if (!Array.isArray(t.subs)) t.subs = []; if (t.due === undefined && t.imp && !t.date && !t.done) t.due = addDays(t.imp, 6); }
   for (const tp of c.topics) if (tp.conf > 4) tp.conf = 4;
   S.months = S.months || {}; S.archive = S.archive || {};
 }
@@ -941,11 +943,11 @@ function vToday() {
     `${dateNav('day')}<input type="date" class="in" style="width:auto" value="${D}" data-ch="pickDay" aria-label="Pick a date"><button class="btn sm soft" data-act="go" data-v="routine">What do I do now?</button>`) + glance + planBanner + ex + `<div class="cols">${cards}</div>`;
 }
 function taskRow(t, o = {}) {
-  const T = today(); const od = !t.done && t.date && t.date < T;
+  const T = today(); const od = isLate(t, T);
   const subsDone = t.subs.filter(s => s.done).length;
   const proj = t.projectId && S.core.projects.find(p => p.id === t.projectId);
   const slot = taskSlot(t);
-  const meta = [slot && !t.done ? `<span title="Scheduled">⏱ ${slot}</span>` : '', catChip(t.cat), secPill(t.sec), od ? `<span class="over">from ${fmtShort(t.date)}</span>` : '', o.date && t.date && !od ? `<span>${t.date === T ? 'Today' : fmtShort(t.date)}</span>` : '', t.est ? `<span>${fmtMin(t.est)}</span>` : '',  t.repeat ? `<span title="${repLabel(t.repeat)}">↻ ${repLabel(t.repeat).replace('Every ', '')}</span>` : '', proj && !o.noProj ? `<span>▸ ${esc(proj.title)}</span>` : '', t.ex ? '<span class="ex">example</span>' : ''].join('');
+  const meta = [slot && !t.done ? `<span title="Scheduled">⏱ ${slot}</span>` : '', catChip(t.cat), secPill(t.sec), od ? `<span class="over">${t.date ? `from ${fmtShort(t.date)}` : `was due ${fmtShort(t.due)}`}</span>` : '', t.due && !t.done && !(od && !t.date) ? `<span class="${t.date && t.date > t.due ? 'over' : ''}" title="Due by">due ${t.due === T ? 'today' : fmtShort(t.due)}</span>` : '', o.date && t.date && !od ? `<span>${t.date === T ? 'Today' : fmtShort(t.date)}</span>` : '', t.est ? `<span>${fmtMin(t.est)}</span>` : '',  t.repeat ? `<span title="${repLabel(t.repeat)}">↻ ${repLabel(t.repeat).replace('Every ', '')}</span>` : '', proj && !o.noProj ? `<span>▸ ${esc(proj.title)}</span>` : '', t.ex ? '<span class="ex">example</span>' : ''].join('');
   const open = UI.openSubs && UI.openSubs[t.id];
   const subsHtml = open ? `<li class="subs"><ul>${t.subs.map(s => `<li class="task ${s.done ? 'done' : ''}"><button class="chk" data-act="subTick" data-id="${t.id}" data-s="${s.id}" aria-label="Step done"></button><span class="tmain"><span class="ttitle">${esc(s.t)}</span></span><button class="star" data-act="subRm" data-id="${t.id}" data-s="${s.id}" aria-label="Remove step">×</button></li>`).join('')}</ul><input class="in" placeholder="+ Add a step, press Enter" data-enter="subAddInline" data-id="${t.id}" id="sa-${t.id}"></li>` : '';
   return `<li class="task ${t.done ? 'done' : ''} pri${t.pri || 0}"><button class="chk" data-act="toggle" data-id="${t.id}" aria-label="${t.done ? 'Mark not done' : 'Mark done'}"></button><button class="tmain" data-act="edit" data-id="${t.id}"><span class="ttitle">${o.num ? '' : ''}${esc(t.title)}</span><span class="tmeta">${meta}</span></button>${t.subs.length || o.steps ? `<button class="subtog ${UI.openSubs && UI.openSubs[t.id] ? 'open' : ''}" data-act="subOpen" data-id="${t.id}" aria-expanded="${!!(UI.openSubs && UI.openSubs[t.id])}" title="Steps">${t.subs.length ? `${subsDone}/${t.subs.length}` : '+'}<span class="sr"> steps</span></button>` : ''}${o.star !== false ? `<button class="star ${t.top ? 'on' : ''}" data-act="star" data-id="${t.id}" aria-label="Top priority" title="Top 3">★</button>` : ''}</li>${subsHtml}`;
@@ -1040,7 +1042,7 @@ function vTasks() {
   const f = UI.taskFilter, q = UI.taskQ.toLowerCase(), cf = UI.taskCat;
   const match = t => (!cf || t.cat === cf || (cf === '_gamsat' && isGamsat(t))) && (!q || t.title.toLowerCase().includes(q) || (t.notes || '').toLowerCase().includes(q));
   const groups = {
-    overdue: all.filter(t => !t.done && t.date && t.date < T),
+    overdue: all.filter(t => isLate(t, T)),
     today: all.filter(t => t.date === T),
     upcoming: all.filter(t => !t.done && t.date && t.date > T),
     someday: all.filter(t => !t.done && !t.date),
@@ -1113,7 +1115,7 @@ function vCalendar(days) {
   const sched = scheduledMap(days);
   const tf = UI.trayF || 'range';
   const inRange = t => t.date && t.date >= days[0] && t.date <= days[days.length - 1];
-  const tray = sortTasks(S.tasks.list.filter(t => !t.done && !sched.has(t.id) && (tf === 'range' ? inRange(t) || (t.date && t.date < T && days.includes(T)) : tf === 'overdue' ? t.date && t.date < T : !t.date)));
+  const tray = sortTasks(S.tasks.list.filter(t => !t.done && !sched.has(t.id) && (tf === 'range' ? inRange(t) || (t.date && t.date < T && days.includes(T)) : tf === 'overdue' ? isLate(t, T) : !t.date)));
   const counts = { range: S.tasks.list.filter(t => !t.done && !sched.has(t.id) && inRange(t)).length, overdue: overdue().length, nodate: S.tasks.list.filter(t => !t.done && !t.date).length };
   const nm = new Date().getHours() * 60 + new Date().getMinutes();
   const col = d => {
@@ -1195,7 +1197,7 @@ document.addEventListener('pointerup', () => {
 function vProjects() {
   if (UI.project) { const p = S.core.projects.find(x => x.id === UI.project); if (p) return vProject(p); UI.project = null; }
   const act = S.core.projects.filter(p => !p.done).sort((a, b) => (a.due || '9') < (b.due || '9') ? -1 : 1), fin = S.core.projects.filter(p => p.done);
-  const card = p => { const pr = projProgress(p); const dl = p.due ? diffDays(today(), p.due) : null; const od = S.tasks.list.filter(t => t.projectId === p.id && !t.done && t.date && t.date < today()).length;
+  const card = p => { const pr = projProgress(p); const dl = p.due ? diffDays(today(), p.due) : null; const od = S.tasks.list.filter(t => t.projectId === p.id && isLate(t)).length;
     return `<button class="card proj flat" data-act="openProj" data-id="${p.id}"><div class="row" style="justify-content:space-between;width:100%">${catChip(p.cat)}${dl != null ? `<span class="due-chip ${dl <= 3 && !p.done ? 'soon' : ''}">${p.done ? 'finished' : dl < 0 ? `${-dl}d late` : dl === 0 ? 'due today' : `due ${fmtShort(p.due)} · ${dl}d`}</span>` : ''}</div><h3>${esc(p.title)}</h3><div class="bar" style="width:100%"><i style="width:${pr.pct}%"></i></div><span class="small muted">${pr.pct}% · ${pr.done}/${pr.n} chunks${od ? ` · <span class="over">${od} behind</span>` : ''}${p.ex ? ' · <span class="ex">example</span>' : ''}</span></button>`; };
   return header('Big things, small next steps', 'Projects', `<span>Break assignments into chunks and spread them across the days before the deadline.</span>`, `<button class="btn pri" data-act="projNew">${ICON.plus} New project</button>`) +
     `<div class="sec-grid">${act.map(card).join('') || '<p class="empty">No projects yet. Add an assignment and let the planner spread the work out for you.</p>'}</div>${fin.length ? `<span class="lab">Finished</span><div class="sec-grid">${fin.map(card).join('')}</div>` : ''}`;
@@ -2116,6 +2118,7 @@ function importPreview() {
     <label class="row small"><input type="checkbox" id="imp-goal" ${IMP.setGoal ? 'checked' : ''} data-ch="impGoal"> Set this week's study goal to <input type="number" min="0" max="80" step="0.5" class="in" style="width:80px;padding:4px 8px" value="${IMP.hpw ?? ''}" data-ch="impHpw"> hours ${IMP.hpw == null ? '<span class="muted">(no HPW in the doc)</span>' : ''}</label>
     <div class="row small"><span>Section goals this week:</span>${['S1', 'S2', 'S3'].map(k => `<span class="secpill ${k}">${k}</span><input type="number" min="0" max="60" step="0.5" class="in" style="width:64px;padding:4px 6px" value="${(IMP.sec || {})[k] ?? ''}" placeholder="–" data-ch="impSec" data-s="${k}" aria-label="${k} hours">`).join('')}<span class="muted">h (optional, from your calculator)</span></div>
     <label class="row small" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" style="margin-top:3px" ${IMP.auto !== false ? 'checked' : ''} data-ch="impAuto"> <span><b>Pick days &amp; times for me.</b> Off: tasks without a set day come in with no date, ready to schedule when you choose.</span></label>
+    <label class="row small" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" style="margin-top:3px" ${IMP.due !== false ? 'checked' : ''} data-ch="impDue"> <span>Undated tasks go <b>overdue if not done by Sunday</b> (end of this plan week)</span></label>
     <label class="row small" ${IMP.auto === false ? 'hidden' : ''}><input type="checkbox" ${IMP.block ? 'checked' : ''} data-ch="impBlock"> Block time for study tasks in my free time (${pad(S.core.settings.dayStart)}:00–${pad(S.core.settings.dayEnd)}:00)</label>
     ${already ? `<label class="row small"><input type="checkbox" ${IMP.replace ? 'checked' : ''} data-ch="impReplace"> Replace what I imported for this week before (keeps anything you've ticked off)</label>` : ''}
     <p class="small">${fmtMin(studyMin)} of study planned${(() => { const ss = ['S1', 'S2', 'S3'].reduce((a, k) => a + (+(IMP.sec || {})[k] || 0), 0); return ss ? ` against ${ss}h of section goals` : IMP.hpw ? ` against a ${IMP.hpw}h goal` : ''; })()}${unplaced ? ` · <span class="over">${unplaced} task${unplaced > 1 ? 's' : ''} didn't fit in free time and will be added without a time block</span>` : ''}.</p></div>
@@ -2178,7 +2181,7 @@ function impCreate() {
     if (r.kind === 'event') { const dd = day(d, true); (dd.events = dd.events || []).push({ id: uid(), t: r.title, imp: ws }); keys.add(dayKey(d)); }
     else if (r.kind === 'block') { const dd = day(d, true); (dd.blocks = dd.blocks || []).push({ id: uid(), s: r.s, e: r.e, t: r.title, cat: r.cat || '', imp: ws }); keys.add(dayKey(d)); nB++; }
     else {
-      const t = newTask({ title: r.title, date: nd ? null : d, cat: r.study ? (r.cat || '') : (gamsatCat() ? gamsatCat().id : ''), sec: r.sec || '', est: r.est || 0, pri: r.pri || 0, imp: ws });
+      const t = newTask({ title: r.title, date: nd ? null : d, cat: r.study ? (r.cat || '') : (gamsatCat() ? gamsatCat().id : ''), sec: r.sec || '', est: r.est || 0, pri: r.pri || 0, imp: ws, due: nd && IMP.due !== false ? addDays(ws, 6) : null });
       S.tasks.list.push(t); nT++;
       if (!nd && P.times[r.id]) { const dd = day(d, true); (dd.blocks = dd.blocks || []).push({ id: uid(), s: P.times[r.id][0], e: P.times[r.id][1], t: r.title, cat: t.cat, imp: ws, taskId: t.id }); keys.add(dayKey(d)); nB++; }
     }
@@ -2212,6 +2215,7 @@ function taskSheet(id) {
     <input class="in" style="font-size:17px" value="${esc(t.title)}" data-ch="tf" data-f="title" data-id="${id}" aria-label="Title">
     <div class="grid2"><div class="field"><span class="lab">Date</span><input type="date" class="in" value="${t.date || ''}" data-ch="tf" data-f="date" data-id="${id}"></div>
     <div class="field"><span class="lab">List</span>${catSelect(t.cat, `data-ch="tf" data-f="cat" data-id="${id}"`)}</div>
+    <div class="field" style="grid-column:1/-1"><span class="lab">Due by (optional)</span><div class="row"><input type="date" class="in" style="flex:0 1 170px" value="${t.due || ''}" data-ch="tf" data-f="due" data-id="${id}"><label class="row small"><input type="checkbox" ${t.due && t.due === addDays(mondayOf(today()), 6) ? 'checked' : ''} data-ch="dueWeek" data-id="${id}"> End of this week</label></div><span class="small muted">The deadline, separate from the day you plan to do it. With no date set, it turns overdue once this passes.</span></div>
     <div class="field"><span class="lab">GAMSAT section</span><select class="in" data-ch="tf" data-f="sec" data-id="${id}">${opt({ '': 'None', S1: 'S1 · Humanities', S2: 'S2 · Writing', S3: 'S3 · Sciences' }, t.sec)}</select></div>
     <div class="field"><span class="lab">Priority</span><select class="in" data-ch="tf" data-f="pri" data-id="${id}">${opt({ 0: 'None', 1: 'Low', 2: 'Medium', 3: 'High' }, t.pri || 0)}</select></div>
     <div class="field"><span class="lab">Time estimate (min)</span><input type="number" min="0" step="5" class="in" value="${t.est || ''}" data-ch="tf" data-f="est" data-id="${id}"></div>
@@ -2644,7 +2648,7 @@ const CH = {
   repU: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); const c = parseEvery(t.repeat); t.repeat = `every:${c ? c.n : 1}:${el.value}`; touch('tasks'); pendingRender = true; },
   tf: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); if (!t) return; const f = el.dataset.f; let v = el.value;
     if (f === 'repeat' && v === 'custom') { t.repeat = 'every:21:day'; touch('tasks'); taskSheet(t.id); return; }
-    if (f === 'pri' || f === 'est') v = +v || 0; if (f === 'date') v = v || null; if (f === 'title' && !v.trim()) return;
+    if (f === 'pri' || f === 'est') v = +v || 0; if (f === 'date' || f === 'due') v = v || null; if (f === 'title' && !v.trim()) return;
     t[f] = v; if (f === 'cat' && gamsatCat() && v !== gamsatCat().id && t.sec) { /* keep section tag */ }
     if (f === 'sec' && v && !t.cat && gamsatCat()) t.cat = gamsatCat().id;
     touch('tasks'); pendingRender = true; },
@@ -2656,6 +2660,8 @@ const CH = {
   impEst: el => { const r = IMP.rows.find(x => x.id === el.dataset.id); r.est = Math.max(0, +el.value || 0); r.estLocked = true; shareMinutes(); importSheet(); },
   impHpw: el => { IMP.hpw = el.value === '' ? null : clamp(+el.value, 0, 80); IMP.setGoal = IMP.hpw != null; shareMinutes(); importSheet(); },
   impGoal: el => { IMP.setGoal = el.checked; },
+  dueWeek: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); if (!t) return; t.due = el.checked ? addDays(mondayOf(today()), 6) : null; touch('tasks'); pendingRender = true; taskSheet(t.id); },
+  impDue: el => { IMP.due = el.checked; importSheet(); },
   impBlock: el => { IMP.block = el.checked; importSheet(); },
   impReplace: el => { IMP.replace = el.checked; importSheet(); },
   gTarget: el => { S.core.settings.gamsat.weekTarget = clamp(+el.value || 0, 0, 80); commit('core'); },
