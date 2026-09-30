@@ -332,6 +332,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 }
 @media (min-width:900px){ .show-m{display:none!important} }
 .swatches{display:flex;gap:8px;flex-wrap:wrap}
+.hues{display:flex;gap:6px;flex-wrap:wrap}
+.hue{width:24px;height:24px;border-radius:50%;background:oklch(var(--dotL) 0.13 var(--h));border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line)}
+.hue.on{box-shadow:0 0 0 2px var(--ink)}
 .sw{width:32px;height:32px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line)}
 .sw.on{box-shadow:0 0 0 2px var(--ink)}
 .paper{width:52px;height:38px;border-radius:9px;border:1px solid var(--line)}
@@ -405,6 +408,9 @@ function face(n) {
   const mouths = ['M8 17c1.2-2 6.8-2 8 0', 'M8.5 16.5c1.5-1 5.5-1 7 0', 'M8.5 16h7', 'M8.5 15.5c1.5 1 5.5 1 7 0', 'M8 15c1.2 2.5 6.8 2.5 8 0'];
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/><path d="${mouths[n - 1]}"/></svg>`;
 }
+const HUES = [[350, 'Pink'], [20, 'Coral'], [55, 'Orange'], [90, 'Yellow'], [145, 'Green'], [190, 'Teal'], [235, 'Blue'], [270, 'Violet'], [310, 'Plum']];
+const nearHue = h => HUES.reduce((b, x) => Math.abs(((x[0] - h + 540) % 360) - 180) < Math.abs(((b[0] - h + 540) % 360) - 180) ? x : b)[0];
+const huePicker = (cur, attrs) => `<div class="hues">${HUES.map(([h, n]) => `<button class="hue ${nearHue(cur) === h ? 'on' : ''}" style="--h:${h}" ${attrs} data-h="${h}" aria-label="${n}" title="${n}"></button>`).join('')}</div>`;
 const MOODS = ['Rough', 'Low', 'Okay', 'Good', 'Great'];
 
 /* ============================== config ============================== */
@@ -1136,8 +1142,8 @@ function vSettings() {
       <div class="field"><span class="lab">Headings</span><div class="seg">${Object.entries(FONTS).map(([k, f]) => `<button class="${st.font === k ? 'on' : ''}" style="font-family:${f.d.replace(/"/g, "'")};font-size:${k === 'hand' ? 17 : 14}px" data-act="set" data-k="font" data-v="${k}">${f.name}</button>`).join('')}</div></div></section>
     <section class="card flat"><div class="chead"><h3>Dashboard cards</h3></div><p class="small muted">Switch cards on or off and drag to reorder (or use the arrows).</p>
       <ul class="cardlist" id="cardlist">${st.cards.map((c, i) => `<li draggable="true" data-i="${i}"><span class="grip" aria-hidden="true">⋮⋮</span><span style="flex:1">${CARDS[c.id]}</span><button class="icon-btn" style="width:28px;height:28px" data-act="cardMove" data-i="${i}" data-d="-1" aria-label="Move up">↑</button><button class="icon-btn" style="width:28px;height:28px" data-act="cardMove" data-i="${i}" data-d="1" aria-label="Move down">↓</button><button class="switch ${c.on ? 'on' : ''}" data-act="cardToggle" data-i="${i}" aria-label="Show ${CARDS[c.id]}" aria-pressed="${c.on}"></button></li>`).join('')}</ul></section>
-    <section class="card flat"><div class="chead"><h3>Colour-coded lists</h3></div>
-      ${cats().map(c => `<div class="row" style="--h:${c.h}"><span class="dot" style="width:14px;height:14px"></span><input class="in" style="flex:1" value="${esc(c.name)}" data-ch="catName" data-id="${c.id}" aria-label="List name"><input type="range" min="0" max="359" value="${c.h}" data-ch="catHue" data-id="${c.id}" style="width:110px;accent-color:oklch(0.65 0.13 ${c.h})" aria-label="Colour"><button class="icon-btn" data-act="catDel" data-id="${c.id}" aria-label="Delete list">×</button></div>`).join('')}
+    <section class="card flat"><div class="chead"><h3>Colour-coded lists</h3></div><p class="small muted">Rename a list or tap a colour. Tasks and time blocks in that list use its colour.</p>
+      ${cats().map(c => `<div class="row" style="--h:${c.h}"><span class="dot" style="width:14px;height:14px"></span><input class="in" style="flex:1" value="${esc(c.name)}" data-ch="catName" data-id="${c.id}" aria-label="List name"><button class="icon-btn" data-act="catDel" data-id="${c.id}" aria-label="Delete list">×</button><div style="flex-basis:100%;padding-left:22px">${huePicker(c.h, `data-act="catHue" data-id="${c.id}"`)}</div></div>`).join('')}
       <div class="addrow"><input class="in" id="cat-add" placeholder="New list, e.g. Work" data-enter="addCat"><button class="btn sm" data-act="addCat">Add</button></div></section>
     <section class="card flat"><div class="chead"><h3>You & your days</h3></div>
       <div class="grid2"><div class="field"><span class="lab">Your name</span><input class="in" value="${esc(st.name)}" data-ch="setName"></div>
@@ -1208,9 +1214,9 @@ function habitSheet(id) {
   openSheet(sheetHead(id ? 'Edit habit' : 'New habit') + `
     <input class="in" id="hb-n" style="font-size:17px" value="${esc(h.name)}" placeholder="e.g. Anki review, 30 min walk" autofocus>
     <div class="field"><span class="lab">How often</span><div class="seg" id="hb-type">${[['daily', 'Every day'], ['weekdays', 'Weekdays'], ['days', 'Chosen days'], ['times', 'X a week']].map(([k, l]) => `<button class="${f.type === k ? 'on' : ''}" data-act="segPick" data-v="${k}">${l}</button>`).join('')}</div></div>
-    <div class="field"><span class="lab">Days (for “chosen days”)</span><div class="chip-row" id="hb-days">${[1, 2, 3, 4, 5, 6, 0].map(d => `<button class="fchip ${(f.days || []).includes(d) ? 'on' : ''}" data-act="chipToggle" data-v="${d}">${DOW[d]}</button>`).join('')}</div></div>
-    <div class="grid2"><div class="field"><span class="lab">Times a week (for “X a week”)</span><input type="number" min="1" max="7" class="in" id="hb-x" value="${f.n || 3}"></div><div class="field"><span class="lab">Started</span><input type="date" class="in" id="hb-s" value="${h.start}"></div></div>
-    <div class="field"><span class="lab">Colour</span><input type="range" min="0" max="359" id="hb-h" value="${h.h}"></div>
+    <div class="field" id="hb-days-f" ${f.type === 'days' ? '' : 'hidden'}><span class="lab">Which days</span><div class="chip-row" id="hb-days">${[1, 2, 3, 4, 5, 6, 0].map(d => `<button class="fchip ${(f.days || []).includes(d) ? 'on' : ''}" data-act="chipToggle" data-v="${d}">${DOW[d]}</button>`).join('')}</div></div>
+    <div class="grid2"><div class="field" id="hb-x-f" ${f.type === 'times' ? '' : 'hidden'}><span class="lab">Times a week</span><input type="number" min="1" max="7" class="in" id="hb-x" value="${f.n || 3}"></div><div class="field"><span class="lab">Started</span><input type="date" class="in" id="hb-s" value="${h.start}"></div></div>
+    <div class="field"><span class="lab">Colour</span><div id="hb-h" data-v="${nearHue(h.h)}">${huePicker(h.h, 'data-act="huePick"')}</div><span class="small muted">Used for this habit's ticks in the tracker grid.</span></div>
     <div class="row" style="justify-content:space-between">${id ? `<div class="row"><button class="btn danger" data-act="habitDel" data-id="${id}">Delete</button><button class="btn" data-act="habitArch" data-id="${id}">Archive</button></div>` : '<span></span>'}<button class="btn pri" data-act="habitSave" data-id="${id || ''}">Save</button></div>`);
 }
 function projSheet(id) {
@@ -1302,7 +1308,7 @@ function qaGo() {
     toast(`Added to ${p.date && p.date !== today() ? fmtShort(p.date) : 'today'}`); }
   else if (QA.type === 'block') { const p = parseQuick(v, base); const s = p.time || '09:00'; const d = p.date || base; const dd = day(d, true); (dd.blocks = dd.blocks || []).push({ id: uid(), s, e: toTime(Math.min(toMin(s) + (p.est || 60), 23 * 60 + 59)), t: p.title, cat: p.cat }); touch(dayKey(d)); toast(`Blocked ${s} on ${fmtShort(d)}`); }
   else if (QA.type === 'note') { const d = day(today(), true); d.refl = d.refl || {}; d.refl.free = (d.refl.free ? d.refl.free + '\n' : '') + v; touch(dayKey(today())); toast("Saved to today's reflection"); }
-  else if (QA.type === 'habit') { S.core.habits.push({ id: uid(), name: v, h: Math.floor(Math.random() * 360), freq: { type: 'daily', days: [], n: 3 }, start: today() }); touch('core'); toast('Habit added'); }
+  else if (QA.type === 'habit') { S.core.habits.push({ id: uid(), name: v, h: HUES[S.core.habits.length % HUES.length][0], freq: { type: 'daily', days: [], n: 3 }, start: today() }); touch('core'); toast('Habit added'); }
   closeSheet();
 }
 
@@ -1387,14 +1393,16 @@ const ACT = {
   habit: el => toggleHabit(el.dataset.id, el.dataset.date),
   habitNew: () => habitSheet(),
   habitEdit: el => habitSheet(el.dataset.id),
-  segPick: el => { el.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === el)); },
+  segPick: el => { el.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === el)); if (el.parentElement.id === 'hb-type') { $('#hb-days-f').hidden = el.dataset.v !== 'days'; $('#hb-x-f').hidden = el.dataset.v !== 'times'; } },
   chipToggle: el => el.classList.toggle('on'),
+  huePick: el => { el.parentElement.querySelectorAll('.hue').forEach(b => b.classList.toggle('on', b === el)); $('#hb-h').dataset.v = el.dataset.h; },
+  catHue: el => { const c = catOf(el.dataset.id); if (c) { c.h = +el.dataset.h; commit('core'); } },
   habitSave: el => {
     const name = val('hb-n').trim(); if (!name) { $('#hb-n').focus(); return; }
     const type = $('#hb-type .on') ? $('#hb-type .on').dataset.v : 'daily';
     const days = [...document.querySelectorAll('#hb-days .on')].map(b => +b.dataset.v);
     if (type === 'days' && !days.length) { toast('Pick at least one day'); return; }
-    const h = { name, h: +val('hb-h'), freq: { type, days, n: clamp(+val('hb-x') || 3, 1, 7) }, start: val('hb-s') || today() };
+    const h = { name, h: +$('#hb-h').dataset.v, freq: { type, days, n: clamp(+val('hb-x') || 3, 1, 7) }, start: val('hb-s') || today() };
     const id = el.dataset.id;
     if (id) Object.assign(S.core.habits.find(x => x.id === id), h); else S.core.habits.push({ id: uid(), ...h });
     touch('core'); closeSheet();
@@ -1475,7 +1483,7 @@ const ACT = {
   set: el => { const k = el.dataset.k; let v = el.dataset.v; if (k === 'accent' || k === 'paper') v = +v; S.core.settings[k] = v; commit('core'); },
   cardToggle: el => { const c = S.core.settings.cards[+el.dataset.i]; c.on = !c.on; commit('core'); },
   cardMove: el => { const a = S.core.settings.cards, i = +el.dataset.i, j = i + +el.dataset.d; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; commit('core'); },
-  addCat: () => { const v = val('cat-add').trim(); if (!v) return; S.core.cats.push({ id: uid(), name: v, h: Math.floor(Math.random() * 360) }); commit('core'); },
+  addCat: () => { const v = val('cat-add').trim(); if (!v) return; S.core.cats.push({ id: uid(), name: v, h: HUES[S.core.cats.length % HUES.length][0] }); commit('core'); },
   catDel: el => withUndo('List deleted', ['core'], () => { S.core.cats = S.core.cats.filter(c => c.id !== el.dataset.id); commit('core'); }),
   clearEx: () => clearExamples(),
   addEx: () => { seedExamples(); commit('core', 'tasks', ...Object.keys(S.months).map(k => 'm:' + k)); toast('Example content added'); },
@@ -1506,7 +1514,6 @@ const CH = {
   gDate: el => { S.core.settings.gamsat.date = el.value; commit('core'); },
   gTarget: el => { S.core.settings.gamsat.weekTarget = clamp(+el.value || 0, 0, 80); commit('core'); },
   catName: el => { const c = catOf(el.dataset.id); if (c && el.value.trim()) { c.name = el.value.trim(); commit('core'); } },
-  catHue: el => { const c = catOf(el.dataset.id); if (c) { c.h = +el.value; commit('core'); } },
   setName: el => { S.core.settings.name = el.value.trim(); commit('core'); },
   setNum: el => { S.core.settings[el.dataset.k] = +el.value; if (S.core.settings.dayEnd <= S.core.settings.dayStart) S.core.settings.dayEnd = S.core.settings.dayStart + 8; commit('core'); },
   bdStart: el => { BD.start = el.value || today(); breakdownSheet(BD.pid); },
