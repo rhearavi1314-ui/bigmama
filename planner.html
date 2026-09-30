@@ -524,7 +524,7 @@ function defaultSettings() {
 function blankCore() {
   return { _u: Date.now(), settings: defaultSettings(),
     cats: [{ id: 'gamsat', name: 'GAMSAT', h: 350 }],
-    habits: [], projects: [], recBlocks: [], scores: [], essays: [], topics: [], mistakes: [], drills: [], ideas: [], schools: [], mmi: [] };
+    habits: [], projects: [], recBlocks: [], scores: [], essays: [], topics: [], mistakes: [], drills: [], sdrills: [], ideas: [], schools: [], mmi: [] };
 }
 const EMPTY = Object.freeze({});
 function day(date, create) {
@@ -823,7 +823,7 @@ function normalise() {
   const ids = new Set(c.settings.cards.map(x => x.id));
   for (const id of Object.keys(CARDS)) if (!ids.has(id)) c.settings.cards.push({ id, on: true });
   c.settings.cards = c.settings.cards.filter(x => CARDS[x.id]);
-  for (const k of ['cats', 'habits', 'projects', 'recBlocks', 'scores', 'essays', 'topics', 'mistakes', 'drills', 'ideas', 'schools', 'mmi']) if (!Array.isArray(c[k])) c[k] = [];
+  for (const k of ['cats', 'habits', 'projects', 'recBlocks', 'scores', 'essays', 'topics', 'mistakes', 'drills', 'sdrills', 'ideas', 'schools', 'mmi']) if (!Array.isArray(c[k])) c[k] = [];
   if (!c.gpa) c.gpa = { scale: 7, years: [{ label: 'Final year', gpa: '', w: 3 }, { label: 'Penultimate year', gpa: '', w: 2 }, { label: 'Antepenultimate year', gpa: '', w: 1 }] };
   if (!S.tasks) S.tasks = { _u: 0, list: [] };
   if (!S.res || !Array.isArray(S.res.list)) S.res = { _u: 0, list: [] };
@@ -941,6 +941,7 @@ function vToday() {
     ${nextBlock ? `<button class="gl" data-act="scrollTo" data-to="schedule"><b style="font-size:20px;line-height:1.3">${nextBlock.s}</b><span>${toMin(nextBlock.s) <= new Date().getHours() * 60 + new Date().getMinutes() ? 'now' : 'next'}: ${esc(nextBlock.t)}</span></button>` : ''}
     ${gl ? `<button class="gl" data-act="go" data-v="gamsat"><b>${(wm / 60).toFixed(1)}<small style="font-size:15px">/${gl}h</small></b><span>GAMSAT this week</span></button>` : ''}
     ${rq ? `<button class="gl" data-act="goContent"><b>${rq}</b><span>topic${rq > 1 ? 's' : ''} to re-review</span></button>` : ''}
+    ${(() => { const n = isT ? errDue(T).length : 0; return n ? `<button class="gl ${errDue(addDays(T, -1)).length ? 'alert' : ''}" data-act="goErrors"><b>${n}</b><span>retr${n > 1 ? 'ies' : 'y'} &amp; drills due</span></button>` : ''; })()}
     ${(() => { const k = upcomingKeys(21)[0]; return k ? `<button class="gl ${diffDays(T, k.date) <= 7 ? 'alert' : ''}" data-act="${k.kind === 'app' ? 'go' : 'goWeek'}" data-v="med"><b>${diffDays(T, k.date)}d</b><span>${esc(k.title)}</span></button>` : ''; })()}
     ${hs.length ? `<button class="gl ${hDone === hs.length ? 'good' : ''}" data-act="scrollTo" data-to="habits"><b>${hDone}/${hs.length}</b><span>habits</span></button>` : ''}
   </div>`;
@@ -1264,6 +1265,7 @@ function vGamsat() {
     </div>
     ${UI.gTab === 'content' ? contentTracker() : ''}
     <div class="sec-grid" ${gH('practice')}>
+      ${errorCard()}
       ${paceCard()}
       <section class="card flat"><div class="chead"><h3>Mock days</h3><button class="link" data-act="mockNew">+ Plan a mock</button></div><p class="small muted">Blocks the real section timings in your calendar and adds the review work for the next two days.</p>${(() => { const ms = []; for (const [mk_, mo] of Object.entries(S.months)) for (const [d, x] of Object.entries(mo.days)) for (const bl of (x.blocks || [])) if (/^Mock S/.test(bl.t)) ms.push([d, bl]); ms.sort((a, b) => a[0] < b[0] ? -1 : 1); return ms.length ? `<ul class="tasks">${ms.slice(-6).map(([d, bl]) => `<li class="task"><div class="tmain"><span class="ttitle">${esc(bl.t)}</span><span class="tmeta"><span>${fmt(d, { weekday: 'short', day: 'numeric', month: 'short' })} · ${bl.s}</span></span></div></li>`).join('')}</ul>` : '<p class="empty">No mocks planned yet.</p>'; })()}</section>
       ${drillsCard()}
@@ -1479,7 +1481,7 @@ function contentTracker() {
     <div class="row" style="justify-content:space-between"><div class="chip-row">${['S3', 'S1', 'S2', ''].map(s => `<button class="fchip ${sec === s ? 'on' : ''}" data-act="topicSec" data-s="${s}">${s || 'All'}</button>`).join('')}</div>
     <div class="chip-row">${[['first', 'First pass'], ['queue', `Review queue`], ['log', 'Mistake log']].map(([k, l]) => `<button class="fchip ${view === k ? 'on' : ''}" data-act="topicView" data-v="${k}">${l}${k === 'queue' && queue.length ? `<span class="n">${queue.length}</span>` : ''}</button>`).join('')}</div></div>
     ${body}
-    <p class="small muted">Do the full question write-up in your Notion analysis database: <a class="link" href="${NOTION_LINKS.S1}" target="_blank" rel="noopener">S1</a> · <a class="link" href="${NOTION_LINKS.S2}" target="_blank" rel="noopener">S2</a> · <a class="link" href="${NOTION_LINKS.S3}" target="_blank" rel="noopener">S3</a>. Log it here too so the topic comes back for review.</p>
+    <p class="small muted">Retries and skill drills for each wrong answer live in the <button class="link" data-act="goErrors">Error tracker</button> (Practice tab).</p>
     <div class="addrow" style="flex-wrap:wrap"><select class="in" id="tp-sec" style="flex:0 0 76px"><option ${sec === 'S1' ? 'selected' : ''}>S1</option><option ${sec === 'S2' ? 'selected' : ''}>S2</option><option ${sec === 'S3' || !sec ? 'selected' : ''}>S3</option></select><input class="in" id="tp-area" list="areas" placeholder="Area (e.g. Physics)" style="flex:1 1 130px"><datalist id="areas">${[...new Set([...Object.keys(S3_STARTER), ...S.core.topics.map(topicArea)])].map(a => `<option value="${esc(a)}">`).join('')}</datalist><input class="in" id="tp-add" placeholder="Add a topic" data-enter="addTopic" style="flex:2 1 160px"><button class="btn sm" data-act="addTopic">Add</button></div></section>`;
 }
 function drillsCard() {
@@ -1489,29 +1491,37 @@ function drillsCard() {
   const rows = types.map(t => { const l = ds.filter(d => d.type === t); const recent = stat(l.slice(0, 3)), prev = stat(l.slice(3, 6)); return { t, sec: l[0].sec, all: stat(l), recent, prev, count: l.length, last: l[0].date }; });
   const pct = v => v == null ? '–' : Math.round(v * 100) + '%';
   const arrow = (a, b, higherBetter) => a == null || b == null || Math.abs(a - b) < 0.005 ? '' : ((a > b) === higherBetter ? '<span style="color:var(--good)"> ▲</span>' : '<span class="over"> ▼</span>');
-  return `<section class="card flat"><div class="chead"><h3>Drills</h3><button class="link" data-act="drillNew">+ Log a drill</button></div>
-    ${rows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Drill</th><th>Sessions</th><th>Accuracy (last 3)</th><th>Pace (last 3)</th></tr></thead><tbody>${rows.map(r => `<tr><td>${secPill(r.sec)} ${esc(r.t)}<br><span class="small muted">last ${fmtShort(r.last)}</span></td><td>${r.count}</td><td>${pct(r.recent.acc)}${arrow(r.recent.acc, r.prev.acc, true)}</td><td>${r.recent.pace ? r.recent.pace.toFixed(2) + ' min/Q' : '–'}${arrow(r.recent.pace, r.prev.pace, false)}</td></tr>`).join('')}</tbody></table></div>
+  return `<section class="card flat"><div class="chead"><h3>Practice sets</h3><button class="link" data-act="drillNew">+ Log a practice set</button></div>
+    ${rows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Type</th><th>Sets</th><th>Accuracy (last 3)</th><th>Pace (last 3)</th></tr></thead><tbody>${rows.map(r => `<tr><td>${secPill(r.sec)} ${esc(r.t)}<br><span class="small muted">last ${fmtShort(r.last)}</span></td><td>${r.count}</td><td>${pct(r.recent.acc)}${arrow(r.recent.acc, r.prev.acc, true)}</td><td>${r.recent.pace ? r.recent.pace.toFixed(2) + ' min/Q' : '–'}${arrow(r.recent.pace, r.prev.pace, false)}</td></tr>`).join('')}</tbody></table></div>
     <span class="lab">Recent</span><div class="table-wrap"><table class="tbl"><tbody>${ds.slice(0, 8).map(d => `<tr data-act="drillEdit" data-id="${d.id}" style="cursor:pointer"><td style="white-space:nowrap">${fmtShort(d.date)}</td><td>${secPill(d.sec)} ${esc(d.type)}</td><td style="white-space:nowrap">${d.correct}/${d.n}</td><td style="white-space:nowrap">${d.min ? d.min + 'm' : ''}</td></tr>`).join('')}</tbody></table></div>`
-    : '<p class="empty">Log each drill session with questions attempted, correct and minutes. You\'ll see accuracy and pace per drill type, and whether they\'re improving.</p>'}
+    : '<p class="empty">Log each timed practice set with questions attempted, correct and minutes. You\'ll see accuracy and pace per drill type, and whether they\'re improving.</p>'}
     <p class="small muted">▲▼ compare your last 3 sessions with the 3 before.</p></section>`;
 }
 function mistakeSheet(id) {
-  const m = id ? S.core.mistakes.find(x => x.id === id) : { date: today(), sec: UI.topicSec || 'S3', topicId: '', src: '', reasons: ['gap'], note: '' };
+  const m = id ? S.core.mistakes.find(x => x.id === id) : { date: today(), sec: UI.topicSec || 'S3', topicId: '', src: '', q: '', stim: '', reasons: ['gap'], note: '', an: false, drillId: '', retries: [] };
+  const nx = id ? mNext(m) : null, sdl = S.core.sdrills.filter(sd => sdNext(sd) || sd.id === m.drillId);
   const groups = {}; for (const tp of S.core.topics) (groups[`${tp.sec} · ${topicArea(tp)}`] = groups[`${tp.sec} · ${topicArea(tp)}`] || []).push(tp);
   openSheet(sheetHead(id ? 'Wrong answer' : 'Log a wrong answer') + `
-    <div class="grid2"><div class="field"><span class="lab">Date</span><input type="date" class="in" id="mk-d" value="${m.date}"></div><div class="field"><span class="lab">Question / source</span><input class="in" id="mk-src" list="mk-res" value="${esc(m.src || '')}" placeholder="e.g. ACER PDF A Q12" autofocus><datalist id="mk-res">${RESOURCES.map(r => `<option value="${r} Q">`).join('')}</datalist></div></div>
+    <div class="grid2"><div class="field"><span class="lab">Date</span><input type="date" class="in" id="mk-d" value="${m.date}"></div><div class="field"><span class="lab">Source</span><input class="in" id="mk-src" list="mk-res" value="${esc(m.src || '')}" placeholder="e.g. ACER PDF A" autofocus><datalist id="mk-res">${RESOURCES.map(r => `<option value="${r}">`).join('')}</datalist></div>
+    <div class="field"><span class="lab">Q#</span><input class="in" id="mk-q" value="${esc(m.q || '')}" placeholder="e.g. 12"></div><div class="field"><span class="lab">Stimulus / subject (optional)</span><input class="in" id="mk-stim" list="mk-stims" value="${esc(m.stim || '')}" placeholder="S1: e.g. Poetry · S3: uses the topic"><datalist id="mk-stims">${['Prose', 'Poetry', 'Cartoon', 'Graph / table', 'Play / dialogue', 'Opinion piece', 'Biology', 'General chemistry', 'Organic chemistry', 'Physics'].map(x => `<option value="${x}">`).join('')}</datalist></div></div>
     <div class="field"><span class="lab">Topic</span><select class="in" id="mk-t" data-ch="mkTopic"><option value="">Choose a topic…</option>${Object.keys(groups).sort().map(g => `<optgroup label="${esc(g)}">${groups[g].map(tp => `<option value="${tp.id}" ${m.topicId === tp.id ? 'selected' : ''}>${esc(tp.name)}</option>`).join('')}</optgroup>`).join('')}<option value="_new">+ New topic…</option></select>
       <div class="row" id="mk-new" hidden><select class="in" id="mk-ns" style="flex:0 0 76px"><option>S1</option><option>S2</option><option selected>S3</option></select><input class="in" id="mk-nn" placeholder="New topic name"></div></div>
     <div class="field"><span class="lab">Type of mistake (pick all that apply)</span><div class="chip-row" id="mk-r">${Object.entries(REASONS).map(([k, l]) => `<button class="fchip ${mReasons(m).includes(k) ? 'on' : ''}" data-act="chipToggle" data-v="${k}">${l}</button>`).join('')}</div><span class="small muted">Same list as your Notion analysis database. <b>Knowledge/content issue</b> puts the topic in your review queue.</span></div>
-    <div class="field"><span class="lab">What to remember</span><textarea class="in" id="mk-n" rows="2" placeholder="e.g. Buffer works best when pH = pKa">${esc(m.note || '')}</textarea></div>
+    <div class="field"><span class="lab">What went wrong / what to remember</span><textarea class="in" id="mk-n" rows="2" placeholder="e.g. Forgot buffer works best when pH = pKa">${esc(m.note || '')}</textarea></div>
+    <div class="field"><span class="lab">Analysis &amp; retries</span>
+      <label class="row small"><input type="checkbox" id="mk-an" ${m.an || m.drillId ? 'checked' : ''}> Analysed</label>
+      <select class="in" id="mk-sd" data-ch="mkSd"><option value="">Not in a skill drill</option>${sdl.map(sd => `<option value="${sd.id}" ${m.drillId === sd.id ? 'selected' : ''}>${sd.sec} · ${esc(sd.skill)}</option>`).join('')}<option value="_new">+ New skill drill…</option></select>
+      <div class="grid2" id="mk-sdnew" hidden><input class="in" id="mk-sk" placeholder="Skill to drill"><input class="in" id="mk-sa" placeholder="Drill activity (optional)"></div>
+      ${(m.retries || []).map((r, j) => `<div class="row small">Retry ${j + 1} <input type="date" class="in" style="width:auto;padding:4px 8px" value="${r.done}" data-ch="mkRd" data-id="${m.id}" data-j="${j}"><select class="in" style="width:auto;padding:4px 26px 4px 8px" data-ch="mkRok" data-id="${m.id}" data-j="${j}"><option value="1" ${r.ok ? 'selected' : ''}>Right</option><option value="0" ${r.ok ? '' : 'selected'}>Wrong</option></select>${r.xd ? `<span class="muted">extra drill ${fmtShort(r.xd)}</span>` : ''}<button class="link" data-act="mkRdel" data-id="${m.id}" data-j="${j}">Remove</button></div>`).join('')}
+      ${nx ? `<span class="small muted">${nx.kind === 'closed' ? 'Closed: you got it right on a retry.' : nx.kind === 'retry' ? `Next: retry ${nx.k + 1}, due ${fmtShort(nx.due)}.` : nx.kind === 'extra' ? 'Next: an extra drill session now, then retry a week after it.' : nx.kind === 'wait' ? 'Next: finish drill session 4. Retry 1 is due a week after it.' : 'Next: analyse it, then add it to a skill drill.'}</span>` : '<span class="small muted">Tick Analysed once you have worked out why you got it wrong. A skill drill schedules its drill sessions and retries for you.</span>'}</div>
     <div class="row" style="justify-content:space-between">${id ? `<button class="btn danger" data-act="mistakeDel" data-id="${id}">Delete</button>` : '<span></span>'}<button class="btn pri" data-act="mistakeSave" data-id="${id || ''}">Save</button></div>`);
 }
 function drillSheet(id) {
   const d = id ? S.core.drills.find(x => x.id === id) : { date: today(), sec: 'S3', type: '', n: '', correct: '', min: '', note: '' };
   const types = [...new Set([...S.core.drills.map(x => x.type), ...DRILL_TYPES])];
-  openSheet(sheetHead(id ? 'Drill' : 'Log a drill') + `
+  openSheet(sheetHead(id ? 'Practice set' : 'Log a practice set') + `
     <div class="grid2"><div class="field"><span class="lab">Date</span><input type="date" class="in" id="dr-d" value="${d.date}"></div><div class="field"><span class="lab">Section</span><select class="in" id="dr-s">${['S1', 'S2', 'S3'].map(s => `<option ${d.sec === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
-    <div class="field" style="grid-column:1/-1"><span class="lab">Drill type</span><input class="in" id="dr-t" list="dr-types" value="${esc(d.type)}" placeholder="e.g. Assorted drills" autofocus><datalist id="dr-types">${types.map(t => `<option value="${esc(t)}">`).join('')}</datalist></div>
+    <div class="field" style="grid-column:1/-1"><span class="lab">Type</span><input class="in" id="dr-t" list="dr-types" value="${esc(d.type)}" placeholder="e.g. Assorted drills" autofocus><datalist id="dr-types">${types.map(t => `<option value="${esc(t)}">`).join('')}</datalist></div>
     <div class="field"><span class="lab">Questions</span><input type="number" min="1" class="in" id="dr-n" value="${d.n}"></div><div class="field"><span class="lab">Correct</span><input type="number" min="0" class="in" id="dr-c" value="${d.correct}"></div>
     <div class="field"><span class="lab">Minutes</span><input type="number" min="0" class="in" id="dr-m" value="${d.min}"></div>
     ${id ? '' : `<label class="row small" style="align-self:end"><input type="checkbox" id="dr-log" checked> Count minutes towards study hours</label>`}</div>
@@ -1579,7 +1589,7 @@ function paceCard() {
     return `<tr><td>${secPill(s)}</td><td><input type="number" step="${s === 'S2' ? 1 : 0.01}" min="0" class="in" style="width:78px;padding:4px 6px" value="${s === 'S2' ? p.S2start || '' : p[s] || ''}" data-ch="paceDiag" data-s="${s}" placeholder="${s === 'S2' ? 'e.g. 40' : 'e.g. 2.1'}" aria-label="${s} starting pace"></td><td>${f(i.target)}</td><td><b>${f(i.now)}</b></td><td class="${ok === false ? 'over' : ''}" style="${ok ? 'color:var(--good)' : ''}">${f(i.actual)}${ok == null ? '' : ok ? ' ✓' : ' behind'}</td></tr>`; };
   const i1 = paceInfo('S1');
   return `<section class="card flat"><div class="chead"><h3>Pace targets</h3><span class="lab">${i1.weeks ? `week ${i1.wi} of ${i1.weeks}` : 'set your dates'}</span></div>
-    <p class="small muted">From your course's “Finding your pace”: target = (time limit − 20 min) ÷ questions. You step from your diagnostic pace to the target, evenly across Phases 2–3. “Actual” is the average of your last 3 drills (S2: last 3 essays).</p>
+    <p class="small muted">From your course's “Finding your pace”: target = (time limit − 20 min) ÷ questions. You step from your diagnostic pace to the target, evenly across Phases 2–3. “Actual” is the average of your last 3 practice sets (S2: last 3 essays).</p>
     <div class="grid2"><div class="field"><span class="lab">Pace work starts (Phase 2)</span><input type="date" class="in" value="${p.start || ''}" data-ch="paceDate" data-k="start"></div><div class="field"><span class="lab">Ends (end of Phase 3)</span><input type="date" class="in" value="${p.end || ''}" data-ch="paceDate" data-k="end"></div></div>
     <div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Diagnostic</th><th>Final target</th><th>This week</th><th>Actual</th></tr></thead><tbody>${row('S1')}${row('S3')}${row('S2')}</tbody></table></div>
     <p class="small muted">S1 target ${targetPace('S1').toFixed(2)} min/Q (62 Q in 100 min) · S3 ${targetPace('S3').toFixed(2)} min/Q (75 Q in 150 min) · S2 30 min per essay. Add any extra-time allowance to these yourself.</p></section>`;
@@ -1839,6 +1849,83 @@ function resEditSheet(id) {
     <div class="row" style="justify-content:space-between"><div class="row"><button class="btn danger" data-act="resDel" data-id="${id}">Remove</button><button class="btn danger" data-act="resDelGrp" data-g="${esc(r.group)}">Remove whole group</button></div><button class="btn pri" data-act="resSave" data-id="${id}">Save</button></div>`);
 }
 
+/* ============================== error loop: skill drills + question retries ==============================
+   Your S1/S3 Error Tracker rules. Every date counts from the day the previous step was actually done.
+   Drill sessions: S1 within 2 days of analysis, S2 +3d, S3 +1w, S4 +2w (last 6 weeks before the exam: 1d/2d/4d/1w).
+   Retry 1: 1 week after drill session 4 (last 6 weeks: 4 days). Wrong → extra drill session now, retry again 1 week after it. */
+const SD_GAP = [2, 3, 7, 14], SD_GAP_LATE = [1, 2, 4, 7];
+const examFor = sec => sec === 'S2' ? S.core.settings.gamsat.s2Date : S.core.settings.gamsat.date;
+const isLateFor = (sec, d) => { const E = examFor(sec); return !!(E && d && d >= addDays(E, -42) && d <= E); };
+const sdDue = (sd, i) => { const base = i ? sd.sess[i - 1] : sd.start; return base ? addDays(base, (isLateFor(sd.sec, base) ? SD_GAP_LATE : SD_GAP)[i]) : null; };
+const sdNext = sd => { const i = sd.sess.findIndex(x => !x); return i < 0 ? null : { i, due: sdDue(sd, i) }; };
+const retryGap = (sec, base) => isLateFor(sec, base) ? 4 : 7;
+const sdOf = m => m.drillId && S.core.sdrills.find(x => x.id === m.drillId);
+/* what a logged question needs next: analyse | wait (for drill S4) | extra (drill session) | retry | closed */
+function mNext(m) {
+  const r = m.retries || [], k = r.length, last = r[k - 1], sd = sdOf(m);
+  if (last && last.ok) return { kind: 'closed', k };
+  if (!k) { if (sd) return sd.sess[3] ? { kind: 'retry', k, due: addDays(sd.sess[3], retryGap(m.sec, sd.sess[3])) } : { kind: 'wait', k };
+    return m.an ? { kind: 'retry', k, due: addDays(m.date, retryGap(m.sec, m.date)) } : { kind: 'analyse', k }; }
+  if (sd && !last.xd) return { kind: 'extra', k, due: last.done };
+  const base = sd ? last.xd : last.done; return { kind: 'retry', k, due: addDays(base, retryGap(m.sec, base)) };
+}
+function errDue(until) {
+  const out = [];
+  for (const sd of S.core.sdrills) { const n = sdNext(sd); if (n && n.due && n.due <= until) out.push({ t: 'sess', due: n.due, x: sd, i: n.i }); }
+  for (const m of S.core.mistakes) { if (m.ex) continue; const n = mNext(m); if ((n.kind === 'retry' || n.kind === 'extra') && n.due <= until) out.push({ t: n.kind, due: n.due, x: m, k: n.k }); }
+  return out.sort((a, b) => a.due < b.due ? -1 : a.due > b.due ? 1 : 0);
+}
+const qLabel = m => esc([m.src, m.q ? `Q${m.q}` : ''].filter(Boolean).join(' ') || `from ${fmtShort(m.date)}`);
+const mSubject = m => { if (m.stim) return m.stim; const tp = S.core.topics.find(x => x.id === m.topicId); return tp ? tp.name : ''; };
+const mWrong = m => m.note || mReasons(m).map(r => REASONS[r] || r).join(', ');
+function errorCard() {
+  const T = today(), sec = UI.errSec ?? 'S3', v = UI.errView || 'due', inSec = x => !sec || x.sec === sec;
+  const dueChip = d => `<span class="due-chip ${d < T ? 'soon' : ''}">${d < T ? `${diffDays(d, T)}d late` : d === T ? 'due today' : `due ${fmtShort(d)}`}</span>`;
+  const item = it => {
+    if (it.t === 'sess') { const sd = it.x, n = S.core.mistakes.filter(m => m.drillId === sd.id).length;
+      return `<li class="task"><button class="tmain" data-act="sdEdit" data-id="${sd.id}"><span class="ttitle">${secPill(sd.sec)} Drill: ${esc(sd.skill)}</span><span class="tmeta"><span>Session ${it.i + 1} of 4</span>${sd.act ? `<span>${esc(sd.act)}</span>` : ''}${n ? `<span>from ${n} Q${n > 1 ? 's' : ''}</span>` : ''}${dueChip(it.due)}</span></button><button class="btn sm" data-act="sdDone" data-id="${sd.id}" data-i="${it.i}">Done</button></li>`; }
+    const m = it.x, sd = sdOf(m);
+    if (it.t === 'extra') return `<li class="task"><button class="tmain" data-act="mistakeEdit" data-id="${m.id}"><span class="ttitle">${secPill(m.sec)} Extra drill: ${esc(sd ? sd.skill : '')}</span><span class="tmeta"><span>${qLabel(m)} was wrong on retry ${it.k}</span>${sd && sd.act ? `<span>${esc(sd.act)}</span>` : ''}${dueChip(it.due)}</span></button><button class="btn sm" data-act="errExtra" data-id="${m.id}">Done</button></li>`;
+    return `<li class="task"><button class="tmain" data-act="mistakeEdit" data-id="${m.id}"><span class="ttitle">${secPill(m.sec)} Retry ${it.k + 1}: ${qLabel(m)}</span><span class="tmeta">${mSubject(m) ? `<span>${esc(mSubject(m))}</span>` : ''}<span>${esc(mWrong(m).slice(0, 70))}</span>${dueChip(it.due)}</span></button><span class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn sm" data-act="errRetry" data-id="${m.id}" data-ok="1" title="Got it right">✓ Right</button><button class="btn sm" data-act="errRetry" data-id="${m.id}" data-ok="0" title="Got it wrong">✗ Wrong</button></span></li>`;
+  };
+  const due = errDue(addDays(T, 7)).filter(it => inSec(it.x)), now = due.filter(it => it.due <= T), soon = due.filter(it => it.due > T);
+  const toAn = S.core.mistakes.filter(m => !m.ex && inSec(m) && mNext(m).kind === 'analyse');
+  let body = '';
+  if (v === 'due') body = `<ul class="tasks">${now.map(item).join('') || '<li class="empty">Nothing due. Nice.</li>'}</ul>
+    ${soon.length ? `<span class="lab">Next 7 days</span><ul class="tasks">${soon.map(item).join('')}</ul>` : ''}
+    ${toAn.length ? `<div class="carry"><div class="chead"><span><b>${toAn.length}</b> question${toAn.length > 1 ? 's' : ''} to analyse</span><button class="link" data-act="errView" data-v="qs">See them</button></div><p class="small muted">Open one, tick <b>Analysed</b> and add it to a skill drill. That starts its drill sessions and retries.</p></div>` : ''}`;
+  else if (v === 'qs') {
+    const ms = S.core.mistakes.filter(m => !m.ex && inSec(m)).sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 80);
+    const rc = (m, j) => { const r = (m.retries || [])[j]; if (r) return `${fmtShort(r.done)} <b style="color:${r.ok ? 'var(--good)' : 'var(--bad)'}">${r.ok ? '✓' : '✗'}</b>`; const n = mNext(m); if (n.k !== j) return j > 0 && (m.retries || [])[0]?.ok ? '' : ''; return n.kind === 'retry' ? `<span class="${n.due < T ? 'over' : 'muted'}">due ${fmtShort(n.due)}</span>` : n.kind === 'wait' ? '<span class="muted">after drill</span>' : n.kind === 'extra' ? '<span class="over">extra drill first</span>' : n.kind === 'analyse' ? '<span class="muted">analyse</span>' : ''; };
+    const later = m => (m.retries || []).slice(2).map(r => `${fmtShort(r.done)} ${r.ok ? '✓' : '✗'}`).join(' · ');
+    body = `<div class="table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Source</th><th>Q#</th><th>${sec === 'S1' ? 'Stimulus' : sec === 'S3' ? 'Subject' : 'Stimulus / subject'}</th><th>What went wrong</th><th>Analysed</th><th>Drill</th><th>Retry 1</th><th>Retry 2</th></tr></thead><tbody>${ms.map(m => { const sd = sdOf(m);
+      return `<tr data-act="mistakeEdit" data-id="${m.id}" style="cursor:pointer"><td style="white-space:nowrap">${fmtShort(m.date)}</td><td>${sec ? '' : secPill(m.sec) + ' '}${esc(m.src || '')}</td><td>${esc(m.q || '')}</td><td>${esc(mSubject(m))}</td><td>${esc(mWrong(m))}</td><td>${m.an || sd ? '✓' : ''}</td><td>${sd ? esc(sd.skill) : ''}</td><td style="white-space:nowrap">${rc(m, 0)}</td><td style="white-space:nowrap">${rc(m, 1)}${later(m) ? `<br><span class="small muted">then ${later(m)}</span>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="9" class="muted">No questions logged yet.</td></tr>'}</tbody></table></div>`;
+  } else {
+    const sds = S.core.sdrills.filter(inSec).slice().sort((a, b) => (!!sdNext(a) === !!sdNext(b) ? (a.start < b.start ? 1 : -1) : sdNext(a) ? -1 : 1));
+    const cell = (sd, i) => sd.sess[i] ? `✓ ${fmtShort(sd.sess[i])}` : sdDue(sd, i) ? `<span class="${sdDue(sd, i) < T ? 'over' : 'muted'}">due ${fmtShort(sdDue(sd, i))}</span>` : '<span class="muted">–</span>';
+    body = `<div class="table-wrap"><table class="tbl"><thead><tr><th>Skill to drill</th><th>Drill activity</th><th>From Q(s)</th><th>Session 1</th><th>Session 2</th><th>Session 3</th><th>Session 4</th><th>Retries set</th></tr></thead><tbody>${sds.map(sd => { const qs = S.core.mistakes.filter(m => m.drillId === sd.id);
+      return `<tr data-act="sdEdit" data-id="${sd.id}" style="cursor:pointer"><td>${sec ? '' : secPill(sd.sec) + ' '}${esc(sd.skill)}</td><td>${esc(sd.act || '')}</td><td>${qs.map(qLabel).join(', ')}</td>${[0, 1, 2, 3].map(i => `<td style="white-space:nowrap">${cell(sd, i)}</td>`).join('')}<td>${sd.sess[3] ? '✓' : ''}</td></tr>`; }).join('') || '<tr><td colspan="8" class="muted">No skill drills yet. Add one when you analyse a wrong answer.</td></tr>'}</tbody></table></div>`;
+  }
+  return `<section class="card flat" id="errors" style="grid-column:1/-1"><div class="chead"><h3>Error tracker</h3><span class="row" style="gap:12px"><button class="link" data-act="sdNew">+ Skill drill</button><button class="link" data-act="mistakeNew">+ Wrong answer</button></span></div>
+    <div class="row" style="justify-content:space-between"><div class="chip-row">${['S3', 'S1', ''].map(s => `<button class="fchip ${sec === s ? 'on' : ''}" data-act="errSec" data-s="${s}">${s || 'All'}</button>`).join('')}</div>
+    <div class="chip-row">${[['due', 'Due'], ['qs', 'Questions'], ['drills', 'Drills']].map(([k, l]) => `<button class="fchip ${v === k ? 'on' : ''}" data-act="errView" data-v="${k}">${l}${k === 'due' && now.length ? `<span class="n">${now.length}</span>` : ''}</button>`).join('')}</div></div>
+    ${body}
+    <details class="small muted"><summary>Your rules</summary><p>Drill sessions: 1 within 2 days of analysis, 2 three days later, 3 a week later, 4 two weeks later. Retry 1 is a week after drill session 4. If you get it wrong, do an extra drill session now, then retry again a week after that. In the last 6 weeks before your exam${S.core.settings.gamsat.date ? ` (from ${fmtShort(addDays(S.core.settings.gamsat.date, -42))})` : ''}, drills are 1 / 2 / 4 / 7 days apart and retries 4 days after the last drill. Every date counts from the day you actually did the step before.</p></details></section>`;
+}
+function sdSheet(id, presetSec) {
+  const sd = id ? S.core.sdrills.find(x => x.id === id) : { sec: presetSec || UI.errSec || 'S3', skill: '', act: '', start: today(), sess: [null, null, null, null] };
+  const qs = id ? S.core.mistakes.filter(m => m.drillId === id) : [];
+  openSheet(sheetHead(id ? 'Skill drill' : 'New skill drill') + `
+    <div class="grid2"><div class="field" style="grid-column:1/-1"><span class="lab">Skill to drill</span><input class="in" id="sd-k" value="${esc(sd.skill)}" placeholder="e.g. Rearranging log equations" autofocus></div>
+    <div class="field" style="grid-column:1/-1"><span class="lab">Drill activity</span><input class="in" id="sd-a" value="${esc(sd.act || '')}" placeholder="e.g. 10 Qs from Des chp 3, untimed"></div>
+    <div class="field"><span class="lab">Section</span><select class="in" id="sd-s">${['S1', 'S3', 'S2'].map(s => `<option ${sd.sec === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+    <div class="field"><span class="lab">Analysed on</span><input type="date" class="in" id="sd-st" value="${sd.start}"></div>
+    ${[0, 1, 2, 3].map(i => `<div class="field"><span class="lab">Session ${i + 1} done${sdDue(sd, i) && !sd.sess[i] ? ` · due ${fmtShort(sdDue(sd, i))}` : ''}</span><input type="date" class="in" id="sd-${i}" value="${sd.sess[i] || ''}"></div>`).join('')}</div>
+    <p class="small muted">Leave a session blank until you've done it. The next one is dated from the day you actually did it.</p>
+    ${qs.length ? `<div class="field"><span class="lab">From questions</span><ul class="small" style="display:flex;flex-direction:column;gap:4px">${qs.map(m => `<li><button class="link" data-act="mistakeEdit" data-id="${m.id}">${qLabel(m)}</button> · ${esc(mWrong(m).slice(0, 80))}</li>`).join('')}</ul></div>` : ''}
+    <div class="row" style="justify-content:space-between">${id ? `<button class="btn danger" data-act="sdDel" data-id="${id}">Delete</button>` : '<span></span>'}<button class="btn pri" data-act="sdSave" data-id="${id || ''}">Save</button></div>`);
+}
+
 /* ============================== my routine (plain-English guide) ============================== */
 const ROUTINE = [
   ['start', 'Start here · once', '20 minutes, then never again', [
@@ -1865,12 +1952,14 @@ const ROUTINE = [
   ]],
   ['during', 'Starting a GAMSAT session', '30 seconds', [
     ['Start the Focus timer and pick the section. This is what counts your study hours.', 'Focus timer', 'focus', ''],
+    ['Do any retries and drill sessions due today first.', 'Error tracker', 'goErrors', ''],
     ['Work from the task. Tick its steps as you go.', '', '', ''],
   ]],
   ['after', 'After every GAMSAT session', '5–10 minutes', [
     ['Tick the task off.', '', '', ''],
-    ['Did questions? Log the drill: questions, correct, minutes.', 'Log a drill', 'drillNew', ''],
-    ['Every wrong or guessed question: “Log a wrong answer” here (20 seconds), then the full write-up in your Notion analysis database.', 'Log a wrong answer', 'mistakeNew', ''],
+    ['Did a timed set? Log it: questions, correct, minutes.', 'Log a practice set', 'drillNew', ''],
+    ['Every wrong or guessed question: “Log a wrong answer” with its source, Q# and what went wrong.', 'Log a wrong answer', 'mistakeNew', ''],
+    ['Analysed it? Open it, tick Analysed and add it to a skill drill. The app then dates the drill sessions and retries.', 'Error tracker', 'goErrors', ''],
     ['Reviewed content? Tick the topic and rate your understanding.', 'Syllabus', 'goTab', 'content'],
     ['Wrote an essay? Log it, then add one reusable idea to your ideas bank.', 'Log an essay', 'essayNew', ''],
   ]],
@@ -2570,20 +2659,38 @@ const ACT = {
     if (tid === '_new') { const nm = val('mk-nn').trim(); if (!nm) { $('#mk-nn').focus(); return; } const tp = { id: uid(), sec: val('mk-ns'), area: 'Other', name: nm, status: 'todo', conf: 0, last: today(), notes: '', misses: 0 }; S.core.topics.push(tp); tid = tp.id; }
     if (!tid) { toast('Choose the topic this question tested'); return; }
     const tp = S.core.topics.find(x => x.id === tid); const reasons = [...document.querySelectorAll('#mk-r .on')].map(b => b.dataset.v); if (!reasons.length) { toast('Pick at least one type of mistake'); return; } const reason = reasons.includes('gap') ? 'gap' : reasons[0];
-    const m = { date: val('mk-d') || today(), sec: tp.sec, topicId: tid, src: val('mk-src').trim(), reason, reasons, note: val('mk-n').trim() };
+    let drillId = val('mk-sd');
+    if (drillId === '_new') { const sk = val('mk-sk').trim(); if (!sk) { $('#mk-sk').focus(); toast('Name the skill to drill'); return; } const sd = { id: uid(), sec: tp.sec, skill: sk, act: val('mk-sa').trim(), start: today(), sess: [null, null, null, null] }; S.core.sdrills.push(sd); drillId = sd.id; }
+    const m = { date: val('mk-d') || today(), sec: tp.sec, topicId: tid, src: val('mk-src').trim(), q: val('mk-q').trim(), stim: val('mk-stim').trim(), reason, reasons, note: val('mk-n').trim(), an: $('#mk-an').checked || !!drillId, drillId };
     const id = el.dataset.id; const old = id && S.core.mistakes.find(x => x.id === id);
-    if (old) { if (mReasons(old).includes('gap') && old.topicId) { const ot = S.core.topics.find(x => x.id === old.topicId); if (ot) ot.misses = Math.max(0, (ot.misses || 0) - 1); } Object.assign(old, m); } else S.core.mistakes.push({ id: uid(), ...m });
+    if (old) { if (mReasons(old).includes('gap') && old.topicId) { const ot = S.core.topics.find(x => x.id === old.topicId); if (ot) ot.misses = Math.max(0, (ot.misses || 0) - 1); } Object.assign(old, m); } else S.core.mistakes.push({ id: uid(), retries: [], ...m });
     if (reason === 'gap') { tp.misses = (tp.misses || 0) + 1; tp.gap = true; }
     if (m.note && !(tp.notes || '').includes(m.note)) tp.notes = (tp.notes ? tp.notes + ' · ' : '') + m.note;
     touch('core'); closeSheet(); toast(reason === 'gap' ? `${tp.name} added to your review queue` : 'Logged. Not a content gap, so it stays out of the review queue.');
   },
+  sdNew: () => sdSheet(), sdEdit: el => sdSheet(el.dataset.id),
+  sdSave: el => { const skill = val('sd-k').trim(); if (!skill) { $('#sd-k').focus(); return; }
+    const sess = [0, 1, 2, 3].map(i => val('sd-' + i) || null); for (let i = 1; i < 4; i++) if (sess[i] && !sess[i - 1]) { toast(`Fill in session ${i} before session ${i + 1}`); return; }
+    const d = { skill, act: val('sd-a').trim(), sec: val('sd-s'), start: val('sd-st') || today(), sess }; const id = el.dataset.id;
+    if (id) Object.assign(S.core.sdrills.find(x => x.id === id), d); else S.core.sdrills.push({ id: uid(), ...d });
+    commit('core'); closeSheet(); },
+  sdDel: el => { closeSheet(); withUndo('Skill drill deleted', ['core'], () => { const id = el.dataset.id; S.core.sdrills = S.core.sdrills.filter(x => x.id !== id); for (const m of S.core.mistakes) if (m.drillId === id) m.drillId = ''; commit('core'); }); },
+  sdDone: el => { const sd = S.core.sdrills.find(x => x.id === el.dataset.id); if (!sd) return; sd.sess[+el.dataset.i] = today(); commit('core'); const n = sdNext(sd);
+    toast(n ? `Session ${n.i + 1} due ${fmtShort(n.due)}` : `All 4 sessions done. Retries due ${fmtShort(addDays(today(), retryGap(sd.sec, today())))}`); },
+  errExtra: el => { const m = S.core.mistakes.find(x => x.id === el.dataset.id); const r = m && (m.retries || [])[m.retries.length - 1]; if (!r) return; r.xd = today(); commit('core'); toast(`Retry ${m.retries.length + 1} due ${fmtShort(mNext(m).due)}`); },
+  errRetry: el => { const m = S.core.mistakes.find(x => x.id === el.dataset.id); if (!m) return; const ok = el.dataset.ok === '1'; (m.retries = m.retries || []).push({ done: today(), ok }); commit('core');
+    toast(ok ? 'Right. That question is closed.' : sdOf(m) ? `Do an extra “${sdOf(m).skill}” drill session now. The next retry is a week after it.` : `Next retry due ${fmtShort(mNext(m).due)}`); },
+  mkRdel: el => { const m = S.core.mistakes.find(x => x.id === el.dataset.id); if (!m) return; m.retries.splice(+el.dataset.j, 1); touch('core'); mistakeSheet(m.id); },
+  errSec: el => { UI.errSec = el.dataset.s; saveUI(); render(); },
+  errView: el => { UI.errView = el.dataset.v; saveUI(); render(); },
+  goErrors: () => { UI.view = 'gamsat'; UI.gTab = 'practice'; UI.errView = 'due'; UI.errSec = ''; saveUI(); render(); window.scrollTo(0, 0); },
   mistakeDel: el => { closeSheet(); withUndo('Wrong answer deleted', ['core'], () => { const m = S.core.mistakes.find(x => x.id === el.dataset.id); if (m && mReasons(m).includes('gap')) { const tp = S.core.topics.find(x => x.id === m.topicId); if (tp) tp.misses = Math.max(0, (tp.misses || 0) - 1); } S.core.mistakes = S.core.mistakes.filter(x => x.id !== el.dataset.id); commit('core'); }); },
   drillNew: () => drillSheet(), drillEdit: el => drillSheet(el.dataset.id),
   drillSave: el => { const type = val('dr-t').trim(); const n = +val('dr-n'), c = +val('dr-c'); if (!type) { $('#dr-t').focus(); return; } if (!n || c > n) { toast(c > n ? 'Correct can\'t be more than questions' : 'Enter how many questions'); return; }
     const d = { date: val('dr-d') || today(), sec: val('dr-s'), type, n, correct: c, min: +val('dr-m') || 0, note: val('dr-no').trim() }; const id = el.dataset.id;
     if (id) Object.assign(S.core.drills.find(x => x.id === id), d); else { S.core.drills.push({ id: uid(), at: Date.now(), ...d }); if (d.min && $('#dr-log') && $('#dr-log').checked) logFocus(d.date, d.min, d.sec, 'Drill: ' + type); }
     touch('core'); closeSheet(); toast(`${Math.round(c / n * 100)}% · ${d.min ? (d.min / n).toFixed(2) + ' min/Q' : 'logged'}`); },
-  drillDel: el => { closeSheet(); withUndo('Drill deleted', ['core'], () => { S.core.drills = S.core.drills.filter(x => x.id !== el.dataset.id); commit('core'); }); },
+  drillDel: el => { closeSheet(); withUndo('Practice set deleted', ['core'], () => { S.core.drills = S.core.drills.filter(x => x.id !== el.dataset.id); commit('core'); }); },
   topicConf: el => { const tp = S.core.topics.find(x => x.id === el.dataset.id); tp.conf = +el.dataset.n; tp.last = today(); tp.gap = false; if (tp.status === 'todo') { tp.status = 'reviewed'; tp.reviewedAt = today(); } commit('core'); toast(`${UNDER[tp.conf]} · next check ${fmtShort(topicDue(tp))}`); },
   topicSec: el => { UI.topicSec = el.dataset.s; render(); },
   topicEdit: el => topicSheet(el.dataset.id),
@@ -2646,6 +2753,9 @@ const CH = {
   gpaF: el => { const r = S.core.gpa.years[+el.dataset.i]; const f = el.dataset.f; r[f] = f === 'label' ? el.value : el.value === '' ? '' : Math.max(0, +el.value); commit('core'); },
   gpaScale: el => { S.core.gpa.scale = +el.value; commit('core'); },
   appF: el => { const a = S.core.schools.find(x => x.id === el.dataset.id); if (a) { a[el.dataset.f] = el.value; commit('core'); } },
+  mkSd: el => { $('#mk-sdnew').hidden = el.value !== '_new'; if (el.value) $('#mk-an').checked = true; },
+  mkRd: el => { const m = S.core.mistakes.find(x => x.id === el.dataset.id); if (!m || !el.value) return; m.retries[+el.dataset.j].done = el.value; touch('core'); pendingRender = true; },
+  mkRok: el => { const m = S.core.mistakes.find(x => x.id === el.dataset.id); if (!m) return; m.retries[+el.dataset.j].ok = el.value === '1'; touch('core'); pendingRender = true; mistakeSheet(m.id); },
   mkTopic: el => { $('#mk-new').hidden = el.value !== '_new'; },
   gSecGoal: el => { const g = S.core.settings.gamsat; g.secGoals = g.secGoals || {}; const cur = g.secGoals[el.dataset.ws] = g.secGoals[el.dataset.ws] || {}; cur[el.dataset.s] = el.value === '' ? '' : clamp(+el.value, 0, 60); if (el.closest('#sheet')) { touch('core'); pendingRender = true; } else commit('core'); },
   impSec: el => { IMP.sec = IMP.sec || {}; IMP.sec[el.dataset.s] = el.value === '' ? '' : clamp(+el.value, 0, 60); shareMinutes(); importSheet(); },
