@@ -224,6 +224,12 @@ div.gut span:first-child{transform:none}
 .ghost{position:fixed;pointer-events:none;z-index:80;background:var(--ink);color:var(--bg);padding:6px 10px;border-radius:9px;font-size:13px;box-shadow:var(--shadow);max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.dragging,body.dragging *{cursor:grabbing!important;user-select:none}
 @media (max-width:899px){.cal-wrap{grid-template-columns:minmax(0,1fr)}.tray{position:static;max-height:none}.tchips{flex-direction:row;overflow-x:auto;padding-bottom:4px}.tchip{max-width:220px;min-width:150px}.cal{max-height:70vh}}
+.rstat{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--faint);flex:none;margin-top:1px;position:relative}
+.rstat.doing{border-color:var(--accent);background:linear-gradient(90deg,var(--accent) 50%,transparent 50%)}
+.rstat.done{border-color:var(--accent);background:var(--accent)}
+.rstat.done::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;border:solid var(--on-accent);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.rlink{color:inherit;text-decoration:none}.rlink:hover{color:var(--accent-ink);text-decoration:underline}
+.done .rlink{text-decoration:line-through}
 .carry{background:var(--bad-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
 .carry .chead{font-size:13px}
 .carry .task{border-color:color-mix(in oklch,var(--bad) 18%,transparent)}
@@ -481,7 +487,7 @@ const FONTS = {
   modern: { name: 'Modern', d: "'Bricolage Grotesque', system-ui, sans-serif" },
 };
 const SECS = { S1: 'Reasoning in Humanities & Social Sciences', S2: 'Written Communication', S3: 'Reasoning in Biological & Physical Sciences' };
-const CARDS = { top3: 'Top 3 priorities', todo: 'To-do list', schedule: 'Time blocks', habits: 'Habits', checkin: 'Check-in', gamsat: 'GAMSAT', projects: 'Projects', reflect: 'Reflection' };
+const CARDS = { top3: 'Top 3 priorities', todo: 'To-do list', schedule: 'Time blocks', habits: 'Habits', checkin: 'Check-in', gamsat: 'GAMSAT', spare: 'Spare time (resources)', projects: 'Projects', reflect: 'Reflection' };
 const REPEATS = { '': 'Does not repeat', daily: 'Every day', weekdays: 'Every weekday', weekly: 'Every week', fortnightly: 'Every 2 weeks', monthly: 'Every month' };
 const REVIEW_GAP = [0, 1, 4, 14, 30, 30];
 
@@ -495,7 +501,7 @@ const TEMPLATES = {
 };
 
 /* ============================== state ============================== */
-let S = { core: null, tasks: null, months: {}, archive: {} };
+let S = { core: null, tasks: null, res: null, months: {}, archive: {} };
 let UI = { view: 'today', date: today(), taskFilter: 'today', taskCat: '', taskQ: '', planMode: 'week', planDate: today(), project: null, habitMonth: mkey(today()) };
 const LS = 'bloom-planner-v1', LSUI = 'bloom-planner-ui';
 const dirty = new Set(), inflight = new Set();
@@ -518,11 +524,11 @@ function day(date, create) {
   if (!d) { if (!create) return EMPTY; d = m.days[date] = {}; }
   return d;
 }
-function getDoc(key) { if (key === 'core') return S.core; if (key === 'tasks') return S.tasks; if (key.startsWith('m:')) return S.months[key.slice(2)]; if (key.startsWith('a:')) return S.archive[key.slice(2)]; }
-function setDoc(key, v) { if (key === 'core') S.core = v; else if (key === 'tasks') S.tasks = v; else if (key.startsWith('m:')) S.months[key.slice(2)] = v; else if (key.startsWith('a:')) S.archive[key.slice(2)] = v; }
+function getDoc(key) { if (key === 'core') return S.core; if (key === 'tasks') return S.tasks; if (key === 'res') return S.res; if (key.startsWith('m:')) return S.months[key.slice(2)]; if (key.startsWith('a:')) return S.archive[key.slice(2)]; }
+function setDoc(key, v) { if (key === 'core') S.core = v; else if (key === 'tasks') S.tasks = v; else if (key === 'res') S.res = v; else if (key.startsWith('m:')) S.months[key.slice(2)] = v; else if (key.startsWith('a:')) S.archive[key.slice(2)] = v; }
 const docId = key => key.replace(':', '-');
-const keyOf = id => id === 'core' || id === 'tasks' ? id : /^m-\d{4}-\d{2}$/.test(id) ? 'm:' + id.slice(2) : /^a-\d{4}$/.test(id) ? 'a:' + id.slice(2) : null;
-const allKeys = () => ['core', 'tasks', ...Object.keys(S.months).map(k => 'm:' + k), ...Object.keys(S.archive).map(k => 'a:' + k)];
+const keyOf = id => id === 'core' || id === 'tasks' || id === 'res' ? id : /^m-\d{4}-\d{2}$/.test(id) ? 'm:' + id.slice(2) : /^a-\d{4}$/.test(id) ? 'a:' + id.slice(2) : null;
+const allKeys = () => ['core', 'tasks', ...(S.res ? ['res'] : []), ...Object.keys(S.months).map(k => 'm:' + k), ...Object.keys(S.archive).map(k => 'a:' + k)];
 const dayKey = date => 'm:' + mkey(date);
 
 let localTimer;
@@ -804,6 +810,7 @@ function normalise() {
   for (const k of ['cats', 'habits', 'projects', 'recBlocks', 'scores', 'essays', 'topics', 'mistakes', 'drills', 'ideas', 'schools', 'mmi']) if (!Array.isArray(c[k])) c[k] = [];
   if (!c.gpa) c.gpa = { scale: 7, years: [{ label: 'Final year', gpa: '', w: 3 }, { label: 'Penultimate year', gpa: '', w: 2 }, { label: 'Antepenultimate year', gpa: '', w: 1 }] };
   if (!S.tasks) S.tasks = { _u: 0, list: [] };
+  if (!S.res || !Array.isArray(S.res.list)) S.res = { _u: 0, list: [] };
   if (!Array.isArray(S.tasks.list)) S.tasks.list = [];
   for (const t of S.tasks.list) { if (!Array.isArray(t.subs)) t.subs = []; }
   for (const tp of c.topics) if (tp.conf > 4) tp.conf = 4;
@@ -977,6 +984,11 @@ const CARD = {
     return `<section class="card"><div class="chead"><h3>Projects</h3><button class="link" data-act="go" data-v="projects">All</button></div>
       ${ps.map(p => { const pr = projProgress(p); const nx = sortTasks(S.tasks.list.filter(t => t.projectId === p.id && !t.done))[0]; const dl = p.due ? diffDays(today(), p.due) : null;
         return `<button class="proj" data-act="openProj" data-id="${p.id}" style="gap:6px"><div class="row" style="justify-content:space-between;width:100%"><b style="font-weight:600">${esc(p.title)}</b>${dl != null ? `<span class="due-chip ${dl <= 3 ? 'soon' : ''}">${dl < 0 ? `${-dl}d late` : dl === 0 ? 'due today' : `${dl}d left`}</span>` : ''}</div><div class="bar" style="width:100%"><i style="width:${pr.pct}%"></i></div><span class="small muted">${pr.done}/${pr.n} chunks${nx ? ` · next: ${esc(nx.title)}` : ''}</span></button>`; }).join('<hr style="border:0;border-top:1px solid var(--line);margin:2px 0;width:100%">') || '<p class="empty">No active projects. <button class="link" data-act="projNew">Break down an assignment</button></p>'}</section>`;
+  },
+  spare() {
+    const sp = spareTime(3); const L = S.res.list; const d = L.filter(r => r.status === 'done').length;
+    return `<section class="card"><div class="chead"><h3>Spare time?</h3><button class="link" data-act="goRes">Resources ${L.length ? `${d}/${L.length}` : ''}</button></div>
+      <ul class="tasks">${sp.map(resRow).join('') || `<li class="empty">Add your GAMSAT resources and the planner will suggest what to do with spare time. <button class="link" data-act="goRes">Add resources</button></li>`}</ul></section>`;
   },
   reflect(D) {
     const r = day(D).refl || {};
@@ -1190,7 +1202,7 @@ function gTabs() {
   const T = today(); const tab = UI.gTab || 'week';
   const od = overdue().filter(isGamsat).length;
   const q = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp))).length;
-  const tabs = [['week', 'This week', od ? `<span class="cnt">${od}</span>` : ''], ['content', 'Content', q ? `<span class="cnt acc">${q}</span>` : ''], ['practice', 'Practice', '']];
+  const tabs = [['week', 'This week', od ? `<span class="cnt">${od}</span>` : ''], ['content', 'Content', q ? `<span class="cnt acc">${q}</span>` : ''], ['practice', 'Practice', ''], ['resources', 'Resources', '']];
   return `<div class="tabs" role="tablist">${tabs.map(([k, l, b]) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-act="gTab" data-v="${k}">${l}${b}</button>`).join('')}</div>`;
 }
 function vGamsat() {
@@ -1234,6 +1246,7 @@ function vGamsat() {
         <p class="small muted">Overall uses ACER's weighting: (S1 + S2 + 2 × S3) ÷ 4. Practice-paper percentages are not scaled scores, so use this to track your trend, not to predict your result.</p></section>
     </div>
     <div ${gH('practice')}>${ideasCard()}</div>
+    ${UI.gTab === 'resources' ? resourcesTab() : ''}
     <section class="card flat" ${gH('practice')}><div class="chead"><h3>Section II essay log</h3><button class="link" data-act="essayNew">+ Log an essay</button></div>
       <div class="table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Task</th><th>Theme</th><th>Time</th><th>Words</th><th>Self-rating</th><th>Fix next time</th></tr></thead><tbody>
       ${S.core.essays.slice().sort((a, b) => a.date < b.date ? 1 : -1).map(e => `<tr data-act="essayEdit" data-id="${e.id}" style="cursor:pointer"><td>${fmtShort(e.date)}</td><td>${e.task}</td><td>${esc(e.theme)}${e.ex ? ' <span class="ex">example</span>' : ''}</td><td>${e.min ? e.min + 'm' : '–'}</td><td>${e.words || '–'}</td><td>${e.rating ? '●'.repeat(e.rating) + '○'.repeat(5 - e.rating) : '–'}</td><td style="min-width:220px">${esc(e.fix || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Log each timed essay with one concrete fix for next time. Patterns show up fast.</td></tr>'}</tbody></table></div></section>`;
@@ -1634,6 +1647,143 @@ function mmiSheet(id) {
     <div class="field"><span class="lab">Self-rating</span><div class="conf" id="mm-r">${[1, 2, 3, 4, 5].map(n => `<button class="${m.rating === n ? 'on' : ''}" data-act="segPick" data-v="${n}">${n}</button>`).join('')}</div></div>
     <div class="field"><span class="lab">Feedback / one fix</span><textarea class="in" id="mm-f" rows="3">${esc(m.fix || '')}</textarea></div>
     <div class="row" style="justify-content:space-between">${id ? `<button class="btn danger" data-act="mmiDel" data-id="${id}">Delete</button>` : '<span></span>'}<button class="btn pri" data-act="mmiSave" data-id="${id || ''}">Save</button></div>`);
+}
+
+/* ============================== resources library ============================== */
+/* Official ACER materials; "reserved" ones are allocated to mocks/evaluations in the March 2027 Game Plan */
+const ACER_SET = [
+  ['ACER sample questions (blue)', 'Phases 2–3: “do if time”', ''],
+  ['ACER practice questions (orange)', 'Phases 2–3: “do if time”', ''],
+  ['ACER practice test 1 (green)', 'Phase 3: “do if time”', ''],
+  ['ACER practice test 2 (purple)', 'Phase 3: “do if time”', ''],
+  ['ACER practice test 3 (pink)', '', 'Mock #3, S1 + S3 (week 24)'],
+  ['ACER PDF practice test A', '', 'Phase 3 must-do, weeks 19–20'],
+  ['ACER PDF practice test B', '', 'Phase 3 must-do, weeks 21–22'],
+  ['ACER online practice test A', '', 'Mock #1, S1 + S3 (week 19)'],
+  ['ACER online practice test B', '', 'Mock #2, S1 + S3 (weeks 20–22)'],
+  ['Des O\'Neill prep test 2', '', 'Check-in #1, S1 + S3 (weeks 12 & 15)'],
+];
+const RES_STATUS = ['todo', 'doing', 'done'];
+const resUrl = r => r.url || (r.fileId ? `https://drive.google.com/open?id=${r.fileId}` : '');
+function guessSec(txt) {
+  const t = (txt || '').toLowerCase();
+  if (/section\s*1|\bs1\b|humanit|poetry|cartoon/.test(t)) return 'S1';
+  if (/section\s*2|\bs2\b|essay|written comm|writing/.test(t)) return 'S2';
+  if (/section\s*3|\bs3\b|science|chem|physic|biolog|math|acid|mole|algebra|logs|exponent|dimension|fraction|organic|formula/.test(t)) return 'S3';
+  return '';
+}
+const cleanTitle = t => t.replace(/\.(pdf|docx?|pptx?|xlsx?|png|jpe?g|mp4|mov|key|pages|txt)$/i, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+function addResources(items, src) {
+  const L = S.res.list; const byKey = new Map(L.map(r => [r.fileId || r.path || r.title.toLowerCase() + '|' + r.group, r]));
+  let n = 0, u = 0;
+  for (const it of items) {
+    const key = it.fileId || it.path || it.title.toLowerCase() + '|' + it.group;
+    const ex = byKey.get(key);
+    if (ex) { ex.group = it.group; u++; continue; }
+    if (L.length >= 2000) break;
+    const r = { id: uid(), title: cleanTitle(it.title), group: it.group || 'Other', sec: it.sec ?? guessSec(it.group + ' ' + it.title), src, status: 'todo', ...(it.fileId ? { fileId: it.fileId } : {}), ...(it.path ? { path: it.path } : {}), ...(it.url ? { url: it.url } : {}), ...(it.reserved ? { reserved: it.reserved } : {}), ...(it.note ? { note: it.note } : {}) };
+    L.push(r); byKey.set(key, r); n++;
+  }
+  touch('res'); return { n, u };
+}
+function spareTime(k = 3) {
+  const T = today(), wk = mondayOf(T), sg = secGoalsFor(wk);
+  const lag = ['S1', 'S2', 'S3'].map(s => { const goal = (+sg[s] || 0) * 60; const done = focusIn(wk, addDays(wk, 6), f => f.sec === s); return [s, goal ? done / goal : 1]; }).sort((a, b) => a[1] - b[1]);
+  const secRank = Object.fromEntries(lag.map(([s], i) => [s, i]));
+  const gapWords = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp))).flatMap(tp => tp.name.toLowerCase().split(/[^a-z]+/).filter(w => w.length > 4));
+  const score = r => (r.status === 'doing' ? -10 : 0) + (secRank[r.sec] ?? 3) + (gapWords.some(w => (r.title + ' ' + r.group).toLowerCase().includes(w)) ? -5 : 0);
+  const ranked = S.res.list.filter(r => r.status !== 'done' && !r.reserved && !r.hidden).sort((a, b) => score(a) - score(b));
+  const out = [], used = new Set();
+  for (const r of ranked) { if (out.length >= k) break; if (!used.has(r.group)) { out.push(r); used.add(r.group); } }
+  for (const r of ranked) { if (out.length >= k) break; if (!out.includes(r)) out.push(r); }
+  return out;
+}
+function resRow(r) {
+  const u = resUrl(r); const st = r.status || 'todo';
+  return `<li class="task ${st === 'done' ? 'done' : ''}"><button class="rstat ${st}" data-act="resCycle" data-id="${r.id}" title="${st === 'todo' ? 'Not started' : st === 'doing' ? 'In progress' : 'Done'} · tap to change" aria-label="Status: ${st}"></button><div class="tmain"><span class="ttitle">${u ? `<a class="rlink" href="${esc(u)}" target="_blank" rel="noopener">${esc(r.title)} <span aria-hidden="true">↗</span></a>` : esc(r.title)}</span><span class="tmeta">${secPill(r.sec)}${r.reserved ? `<span class="due-chip soon" title="Your Game Plan uses this for a mock or check-in">Saved for: ${esc(r.reserved)}</span>` : ''}${r.note ? `<span>${esc(r.note)}</span>` : ''}${r.src === 'icloud' ? '<span>iCloud</span>' : ''}${st === 'done' && r.doneAt ? `<span>done ${fmtShort(r.doneAt)}</span>` : ''}</span></div><button class="star" data-act="resEdit" data-id="${r.id}" aria-label="Edit">⋯</button></li>`;
+}
+function resourcesTab() {
+  const L = S.res.list.filter(r => !r.hidden); const f = UI.resF || { sec: '', st: 'open', q: '' };
+  const q = (f.q || '').toLowerCase();
+  const match = r => (!f.sec || r.sec === f.sec) && (f.st === 'all' || (f.st === 'open' ? r.status !== 'done' : r.status === f.st)) && (!q || (r.title + ' ' + r.group).toLowerCase().includes(q));
+  const shown = L.filter(match); const groups = [...new Set(shown.map(r => r.group))].sort((a, b) => a.localeCompare(b));
+  const done = L.filter(r => r.status === 'done').length; const sp = spareTime(3);
+  UI.openRes = UI.openRes || {};
+  const bySec = s => { const l = L.filter(r => r.sec === s); return [l.filter(r => r.status === 'done').length, l.length]; };
+  return `<section class="card flat"><div class="chead"><h3>Spare time? Do one of these</h3><span class="lab">picked for you</span></div>
+      <p class="small muted">Chosen from resources you haven't finished, favouring the section you're furthest behind on this week and topics in your review queue. Papers your Game Plan saves for mocks are never suggested.</p>
+      <ul class="tasks">${sp.map(resRow).join('') || '<li class="empty">Add your resources below and suggestions will appear here.</li>'}</ul></section>
+    <section class="card flat"><div class="chead"><h3>Resources</h3><span class="lab">${done}/${L.length} done</span></div>
+      <div class="bar"><i style="width:${L.length ? done / L.length * 100 : 0}%"></i></div>
+      <div class="stats">${['S1', 'S2', 'S3'].map(s => { const [d, n] = bySec(s); return `<div class="stat"><b>${d}/${n}</b><span class="lab">${s} done</span></div>`; }).join('')}</div>
+      <div class="row" style="justify-content:space-between"><div class="chip-row">${[['', 'All'], ['S1', 'S1'], ['S2', 'S2'], ['S3', 'S3']].map(([k, l]) => `<button class="fchip ${f.sec === k ? 'on' : ''}" data-act="resF" data-k="sec" data-v="${k}">${l}</button>`).join('')}</div>
+        <div class="chip-row">${[['open', 'Not done'], ['doing', 'In progress'], ['done', 'Done'], ['all', 'Everything']].map(([k, l]) => `<button class="fchip ${f.st === k ? 'on' : ''}" data-act="resF" data-k="st" data-v="${k}">${l}</button>`).join('')}</div></div>
+      <input class="in" id="res-q" placeholder="Search resources" value="${esc(f.q || '')}" data-inp="resQ">
+      ${groups.map(g => { const rs = shown.filter(r => r.group === g); const all = L.filter(r => r.group === g); const d = all.filter(r => r.status === 'done').length; const open = UI.openRes[g] ?? (groups.length <= 3 || !!q);
+        return `<div class="field" style="gap:2px"><button class="row" style="justify-content:space-between;width:100%" data-act="resGrp" data-g="${esc(g)}" aria-expanded="${open}"><span class="lab" style="text-align:left">${open ? '▾' : '▸'} ${esc(g)}</span><span class="small muted">${d}/${all.length}</span></button><div class="bar" style="height:4px"><i style="width:${all.length ? d / all.length * 100 : 0}%"></i></div>${open ? `<ul class="tasks">${rs.map(resRow).join('')}</ul>` : ''}</div>`; }).join('') || `<p class="empty">${L.length ? 'Nothing matches these filters.' : 'No resources yet. Add them from your Google Drive, your Mac folder, or the ACER list below.'}</p>`}
+    </section>
+    <section class="card flat"><div class="chead"><h3>Add resources</h3></div>
+      <div class="sec-grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px">
+        <div class="field"><b>Google Drive folders</b><span class="small muted">Scans your GAMSAT folders and every subfolder. Run it again any time: it adds new files and keeps your ticks.</span><button class="btn sm soft" data-act="resDrive" style="align-self:flex-start">Choose Drive folders</button></div>
+        <div class="field"><b>Your Mac / iCloud folder</b><span class="small muted">Pick your GAMSAT folder in “Desktop 1016”. Only file names are read. Nothing is uploaded.</span><label class="btn sm soft" for="res-dir" style="align-self:flex-start">Choose folder</label><input type="file" id="res-dir" webkitdirectory directory multiple hidden data-ch="resDir"></div>
+        <div class="field"><b>Official ACER materials</b><span class="small muted">The 10 papers in your Game Plan, marking the ones it saves for mocks and check-ins.</span><button class="btn sm soft" data-act="resAcer" style="align-self:flex-start">${S.res.list.some(r => r.src === 'acer') ? 'Added ✓' : 'Add ACER list'}</button></div>
+        <div class="field"><b>Anything else</b><span class="small muted">One per line. Paste file names copied from Finder, or “Title | link”.</span><textarea class="in" id="res-paste" rows="2" placeholder="Jesse Osbourne acid–base video | https://…"></textarea><div class="row"><input class="in" id="res-pg" placeholder="Group (e.g. Videos)" style="flex:1"><button class="btn sm" data-act="resPaste">Add</button></div></div>
+      </div></section>`;
+}
+function resDriveSheet() {
+  const R = UI.resDrive = UI.resDrive || { found: null, busy: false, sel: {}, status: '' };
+  openSheet(sheetHead('Import from Google Drive') + `
+    <p class="small muted">Pick the folders that hold your resources. Every file inside them, and inside their subfolders, is added as a resource you can tick off.</p>
+    <div class="addrow"><input class="in" id="rd-q" placeholder="Search folder names (e.g. GAMSAT, Des, S3)" value="${esc(R.q || '')}" data-enter="resDriveFind"><button class="btn sm" data-act="resDriveFind" ${R.busy ? 'disabled' : ''}>Search</button></div>
+    ${R.found ? `<ul class="tasks">${R.found.map(f => `<li class="task"><button class="chk ${R.sel[f.id] ? 'on' : ''}" data-act="resDriveSel" data-id="${f.id}" aria-label="Select"></button><div class="tmain"><span class="ttitle">${esc(f.title)}</span><span class="tmeta">${f.owner && !/rhearavi/.test(f.owner) ? `<span>shared by ${esc(f.owner)}</span>` : '<span>yours</span>'}</span></div></li>`).join('') || '<li class="empty">No folders found.</li>'}</ul>` : ''}
+    ${R.status ? `<p class="small ${R.bad ? 'over' : 'muted'}">${esc(R.status)}</p>` : ''}
+    <div class="row" style="justify-content:flex-end"><button class="btn" data-act="close">Close</button><button class="btn pri" data-act="resDriveGo" ${R.busy || !Object.values(R.sel).some(Boolean) ? 'disabled' : ''}>${R.busy ? 'Scanning…' : 'Import selected folders'}</button></div>`);
+}
+async function resDriveFind() {
+  const R = UI.resDrive; R.q = val('rd-q').trim(); R.busy = true; R.status = 'Searching…'; R.bad = false; resDriveSheet();
+  const terms = R.q ? [R.q] : ['GAMSAT', 'Des', 'S3', 'ACE', 'Section', 'Resources', 'Worksheets'];
+  try {
+    const p = await mcpCall('search_files', { query: `mimeType = 'application/vnd.google-apps.folder' and (${terms.map(t => `title contains '${t.replace(/'/g, "\\'")}'`).join(' or ')})`, pageSize: 50, excludeContentSnippets: true });
+    R.found = ((p && p.files) || []).map(f => ({ id: f.id, title: f.title, owner: f.owner }));
+    R.status = R.found.length ? 'Tick the top-level folders you want. Subfolders are included automatically.' : '';
+  } catch (e) { R.status = mcpErr(e); R.bad = true; }
+  R.busy = false; if ($('#sheet').innerHTML) resDriveSheet();
+}
+async function crawl(id, path, depth, out, seen, R) {
+  if (depth > 7 || out.length >= 1500 || seen.has(id)) return; seen.add(id);
+  let token = null, guard = 0;
+  do {
+    const p = await mcpCall('search_files', { query: `parentId = '${id}'`, pageSize: 100, excludeContentSnippets: true, ...(token ? { pageToken: token } : {}) });
+    const files = (p && p.files) || [];
+    for (const f of files) {
+      if (f.mimeType === 'application/vnd.google-apps.folder') await crawl(f.id, path + ' / ' + f.title, depth + 1, out, seen, R);
+      else out.push({ fileId: f.id, title: f.title, group: path });
+      if (out.length >= 1500) break;
+    }
+    R.status = `Scanning… ${out.length} files so far`; const el = $('#sheet p.small'); if (el) el.textContent = R.status;
+    token = p && p.nextPageToken;
+  } while (token && guard++ < 30 && out.length < 1500);
+}
+async function resDriveGo() {
+  const R = UI.resDrive; const ids = Object.keys(R.sel).filter(k => R.sel[k]); if (!ids.length) return;
+  R.busy = true; R.bad = false; R.status = 'Scanning…'; resDriveSheet();
+  const out = [], seen = new Set();
+  try { for (const id of ids) { const f = R.found.find(x => x.id === id); await crawl(id, f ? f.title : 'Drive', 0, out, seen, R); } }
+  catch (e) { R.status = mcpErr(e) + (out.length ? ` (${out.length} files were found before it stopped and have been added.)` : ''); R.bad = true; }
+  const { n, u } = addResources(out, 'drive');
+  R.busy = false; if (!R.bad) R.status = ''; R.sel = {};
+  if (!R.bad) { closeSheet(); toast(`${n} resources added${u ? `, ${u} already there` : ''}${out.length >= 1500 ? ' (stopped at 1,500 files)' : ''}`); } else { render(); if ($('#sheet').innerHTML) resDriveSheet(); }
+}
+function resEditSheet(id) {
+  const r = S.res.list.find(x => x.id === id); if (!r) return;
+  openSheet(sheetHead('Resource') + `<input class="in" id="re-t" value="${esc(r.title)}" style="font-size:16px">
+    <div class="grid2"><div class="field"><span class="lab">Section</span><select class="in" id="re-s">${[['', 'General / all'], ['S1', 'S1'], ['S2', 'S2'], ['S3', 'S3']].map(([k, l]) => `<option value="${k}" ${r.sec === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div class="field"><span class="lab">Status</span><select class="in" id="re-st">${[['todo', 'Not started'], ['doing', 'In progress'], ['done', 'Done']].map(([k, l]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div class="field" style="grid-column:1/-1"><span class="lab">Group</span><input class="in" id="re-g" value="${esc(r.group)}"></div>
+    <div class="field" style="grid-column:1/-1"><span class="lab">Saved for (keeps it out of spare-time suggestions)</span><input class="in" id="re-r" value="${esc(r.reserved || '')}" placeholder="e.g. Mock #2"></div>
+    <div class="field" style="grid-column:1/-1"><span class="lab">Note</span><input class="in" id="re-n" value="${esc(r.note || '')}" placeholder="e.g. did Q1–20, scored 14"></div></div>
+    ${r.path ? `<p class="small muted">On your Mac: ${esc(r.path)}</p>` : ''}
+    <div class="row" style="justify-content:space-between"><div class="row"><button class="btn danger" data-act="resDel" data-id="${id}">Remove</button><button class="btn danger" data-act="resDelGrp" data-g="${esc(r.group)}">Remove whole group</button></div><button class="btn pri" data-act="resSave" data-id="${id}">Save</button></div>`);
 }
 
 /* ============================== weekly Game Plan import ============================== */
@@ -2270,6 +2420,20 @@ const ACT = {
   mmiNew: () => mmiSheet(), mmiEdit: el => mmiSheet(el.dataset.id),
   mmiSave: el => { const r = $('#mm-r .on'); const m = { date: val('mm-d') || today(), type: val('mm-t'), prompt: val('mm-p').trim(), rating: r ? +r.dataset.v : 0, fix: val('mm-f').trim() }; const id = el.dataset.id; if (id) Object.assign(S.core.mmi.find(x => x.id === id), m); else S.core.mmi.push({ id: uid(), ...m }); touch('core'); closeSheet(); },
   mmiDel: el => { closeSheet(); withUndo('Station deleted', ['core'], () => { S.core.mmi = S.core.mmi.filter(x => x.id !== el.dataset.id); commit('core'); }); },
+  goRes: () => { UI.view = 'gamsat'; UI.gTab = 'resources'; saveUI(); render(); window.scrollTo(0, 0); },
+  resCycle: el => { const r = S.res.list.find(x => x.id === el.dataset.id); const i = RES_STATUS.indexOf(r.status || 'todo'); r.status = RES_STATUS[(i + 1) % 3]; r.doneAt = r.status === 'done' ? today() : null; commit('res'); if (r.status === 'done') toast(`Done: ${r.title}`); },
+  resF: el => { UI.resF = UI.resF || { sec: '', st: 'open', q: '' }; UI.resF[el.dataset.k] = el.dataset.v; render(); },
+  resGrp: el => { const g = el.dataset.g; UI.openRes[g] = el.getAttribute('aria-expanded') !== 'true'; render(); },
+  resEdit: el => resEditSheet(el.dataset.id),
+  resSave: el => { const r = S.res.list.find(x => x.id === el.dataset.id); Object.assign(r, { title: val('re-t').trim() || r.title, sec: val('re-s'), status: val('re-st'), group: val('re-g').trim() || r.group, reserved: val('re-r').trim(), note: val('re-n').trim() }); if (r.status === 'done' && !r.doneAt) r.doneAt = today(); touch('res'); closeSheet(); },
+  resDel: el => { closeSheet(); withUndo('Resource removed', ['res'], () => { S.res.list = S.res.list.filter(x => x.id !== el.dataset.id); commit('res'); }); },
+  resDelGrp: el => { const g = el.dataset.g; closeSheet(); withUndo(`Removed “${g}”`, ['res'], () => { S.res.list = S.res.list.filter(x => x.group !== g); commit('res'); }); },
+  resAcer: () => { const { n } = addResources(ACER_SET.map(([t, note, reserved]) => ({ title: t, group: 'Official ACER materials', sec: '', note, reserved })), 'acer'); render(); toast(n ? `${n} ACER papers added` : 'Already added'); },
+  resPaste: () => { const g = val('res-pg').trim() || 'My resources'; const items = val('res-paste').split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [t, u] = l.split('|').map(x => x.trim()); return { title: t, url: u && /^https?:\/\//.test(u) ? u : '', group: g }; }); if (!items.length) return; const { n } = addResources(items, 'manual'); render(); toast(`${n} added`); },
+  resDrive: () => { UI.resDrive = null; resDriveSheet(); resDriveFind(); },
+  resDriveFind: () => resDriveFind(),
+  resDriveSel: el => { UI.resDrive.sel[el.dataset.id] = !UI.resDrive.sel[el.dataset.id]; resDriveSheet(); },
+  resDriveGo: () => resDriveGo(),
   gTab: el => { UI.gTab = el.dataset.v; saveUI(); render(); },
   topicView: el => { UI.topicView = el.dataset.v; render(); },
   loadWorkbook: () => loadWorkbook(),
@@ -2334,7 +2498,7 @@ const ACT = {
   addEx: () => { seedExamples(); commit('core', 'tasks', ...Object.keys(S.months).map(k => 'm:' + k)); toast('Example content added'); },
   resetAsk: () => { $('#reset-zone').innerHTML = `<div class="carry"><b class="over">Erase all tasks, habits, journal entries and settings?</b><span class="small">This can't be undone. Export a backup first if you might want it.</span><div class="row"><button class="btn sm" data-act="resetNo">Keep my data</button><button class="btn sm danger" data-act="resetYes">Erase everything</button></div></div>`; },
   resetNo: () => render(),
-  resetYes: async () => { const keys = allKeys(); const old = { ...S }; S = { core: blankCore(), tasks: { _u: Date.now(), list: [] }, months: {}, archive: {} }; S.core.settings.name = old.core.settings.name;
+  resetYes: async () => { const keys = allKeys(); const old = { ...S }; S = { core: blankCore(), tasks: { _u: Date.now(), list: [] }, res: { _u: Date.now(), list: [] }, months: {}, archive: {} }; S.core.settings.name = old.core.settings.name;
     for (const k of keys) { if (k.startsWith('m:') || k.startsWith('a:')) { if (col) { try { await col.doc(docId(k)).delete(); } catch (e) {} } } } touch('core', 'tasks'); UI.view = 'today'; render(); toast('Everything erased'); },
   export: async () => {
     const data = JSON.stringify({ app: 'bloom-planner', version: 1, exported: new Date().toISOString(), data: S }, null, 1);
@@ -2348,6 +2512,9 @@ const ACT = {
 };
 
 const CH = {
+  resDir: el => { const fs = [...(el.files || [])].filter(f => !/(^|\/)\./.test(f.webkitRelativePath || f.name)); if (!fs.length) { toast('No files found in that folder'); return; }
+    const items = fs.map(f => { const p = f.webkitRelativePath || f.name; const parts = p.split('/'); return { title: parts.pop(), group: parts.join(' / ') || 'Mac folder', path: p }; });
+    const { n, u } = addResources(items, 'icloud'); el.value = ''; render(); toast(`${n} files added from your folder${u ? `, ${u} already there` : ''}`); },
   gS2Date: el => { S.core.settings.gamsat.s2Date = el.value; commit('core'); },
   gKey: el => { const g = S.core.settings.gamsat; g.keys = g.keys || {}; g.keys[el.dataset.k] = el.value; commit('core'); },
   paceDiag: el => { const g = S.core.settings.gamsat; g.pace = g.pace || {}; g.pace[el.dataset.s === 'S2' ? 'S2start' : el.dataset.s] = el.value === '' ? '' : Math.max(0, +el.value); commit('core'); },
@@ -2388,12 +2555,13 @@ const CH = {
     const f = el.files && el.files[0]; if (!f) return;
     const r = new FileReader();
     r.onload = () => { try { const j = JSON.parse(r.result); const d = j.data || j; if (!d.core || !d.tasks) throw 0;
-      S = { core: d.core, tasks: d.tasks, months: d.months || {}, archive: d.archive || {} }; normalise(); touch(...allKeys()); render(); toast('Backup restored'); }
+      S = { core: d.core, tasks: d.tasks, res: d.res || null, months: d.months || {}, archive: d.archive || {} }; normalise(); touch(...allKeys()); render(); toast('Backup restored'); }
       catch (e) { toast("That file isn't a Bloom backup. Choose the .json file you exported."); } };
     r.readAsText(f);
   },
 };
 const INP = {
+  resQ: el => { UI.resF = UI.resF || { sec: '', st: 'open', q: '' }; UI.resF.q = el.value; clearTimeout(INP._r); INP._r = setTimeout(() => { const pos = el.selectionStart; render(); const n = $('#res-q'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }, 250); },
   refl: el => { const d = day(el.dataset.date, true); d.refl = d.refl || {}; d.refl[el.dataset.k] = el.value; delete d.refl.exR; touch(dayKey(el.dataset.date)); autosize(el); },
   weekly: el => { const d = day(el.dataset.date, true); d.weekly = d.weekly || {}; d.weekly[el.dataset.k] = el.value; touch(dayKey(el.dataset.date)); autosize(el); },
   tnotes: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); if (t) { t.notes = el.value; touch('tasks'); } },
@@ -2403,7 +2571,7 @@ const INP = {
 let inpTimers = new WeakMap();
 document.addEventListener('click', e => { if (suppressClick) { e.preventDefault(); e.stopPropagation(); return; } const a = e.target.closest('[data-act]'); if (!a) return; if (a.tagName === 'INPUT') return; const fn = ACT[a.dataset.act]; if (fn) { if (a.dataset.act !== 'scrim') e.preventDefault(); fn(a, e); } });
 document.addEventListener('change', e => { const el = e.target.closest('[data-ch]'); if (el && CH[el.dataset.ch]) CH[el.dataset.ch](el, e); });
-document.addEventListener('input', e => { const el = e.target; if (el.id === 'qa') { qaPreview(); return; } if (el.dataset && el.dataset.inp && INP[el.dataset.inp]) { if (el.dataset.inp === 'taskQ') return INP.taskQ(el); if (el.dataset.auto) autosize(el); clearTimeout(inpTimers.get(el)); inpTimers.set(el, setTimeout(() => INP[el.dataset.inp](el), 400)); } });
+document.addEventListener('input', e => { const el = e.target; if (el.id === 'qa') { qaPreview(); return; } if (el.dataset && el.dataset.inp && INP[el.dataset.inp]) { if (el.dataset.inp === 'taskQ') return INP.taskQ(el); if (el.dataset.inp === 'resQ') return INP.resQ(el); if (el.dataset.auto) autosize(el); clearTimeout(inpTimers.get(el)); inpTimers.set(el, setTimeout(() => INP[el.dataset.inp](el), 400)); } });
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (S.core) quickSheet(); return; }
   if (e.key === 'Escape' && $('#sheet').innerHTML) { closeSheet(); return; }
@@ -2437,7 +2605,7 @@ function startApp(withEx) {
   booted = true; touch(...allKeys()); render();
 }
 async function boot() {
-  try { const raw = localStorage.getItem(LS); if (raw) { const j = JSON.parse(raw); if (j && j.core) S = { core: j.core, tasks: j.tasks, months: j.months || {}, archive: j.archive || {} }; } } catch (e) {}
+  try { const raw = localStorage.getItem(LS); if (raw) { const j = JSON.parse(raw); if (j && j.core) S = { core: j.core, tasks: j.tasks, res: j.res || null, months: j.months || {}, archive: j.archive || {} }; } } catch (e) {}
   try { const u = JSON.parse(localStorage.getItem(LSUI) || '{}'); Object.assign(UI, { view: u.view || 'today', taskFilter: u.taskFilter || 'today', planMode: u.planMode || 'week', gTab: u.gTab || 'week' }); } catch (e) {}
   UI.lastSeen = today();
   if (S.core) { normalise(); maybeArchive(); booted = true; render(); initRemote(); return; }
