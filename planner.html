@@ -523,7 +523,7 @@ function defaultSettings() {
 }
 function blankCore() {
   return { _u: Date.now(), settings: defaultSettings(),
-    cats: [{ id: 'gamsat', name: 'GAMSAT', h: 350 }, { id: 'uni', name: 'Uni', h: 285 }, { id: 'clinic', name: 'Placement', h: 195 }, { id: 'health', name: 'Health', h: 145 }, { id: 'life', name: 'Life', h: 65 }],
+    cats: [{ id: 'gamsat', name: 'GAMSAT', h: 350 }],
     habits: [], projects: [], recBlocks: [], scores: [], essays: [], topics: [], mistakes: [], drills: [], ideas: [], schools: [], mmi: [] };
 }
 const EMPTY = Object.freeze({});
@@ -617,11 +617,13 @@ const tasksOn = d => S.tasks.list.filter(t => t.date === d);
 /* late = its day has passed, or (no day set) its "due by" deadline has passed */
 const isLate = (t, T = today()) => !t.done && (t.date ? t.date < T : !!(t.due && t.due < T));
 const overdue = () => { const T = today(); return S.tasks.list.filter(t => isLate(t, T)); };
+const orphans = () => S.tasks.list.filter(t => !t.done && !t.ex && t.cat && !catOf(t.cat));
 const isGamsat = t => t.sec || (gamsatCat() && t.cat === gamsatCat().id);
 function sortTasks(a) { return a.slice().sort((x, y) => (x.done - y.done) || ((y.pri || 0) - (x.pri || 0)) || ((x.date || '9') < (y.date || '9') ? -1 : (x.date || '9') > (y.date || '9') ? 1 : 0) || (x.created - y.created)); }
 
 function newTask(p) {
-  return Object.assign({ id: uid(), title: '', date: null, cat: '', sec: '', pri: 0, est: 0, done: false, doneAt: null, top: false, notes: '', repeat: '', projectId: '', subs: [], created: Date.now() }, p);
+  const t = Object.assign({ id: uid(), title: '', date: null, cat: '', sec: '', pri: 0, est: 0, done: false, doneAt: null, top: false, notes: '', repeat: '', projectId: '', subs: [], created: Date.now() }, p);
+  if (!t.cat && gamsatCat() && !t.ex) t.cat = gamsatCat().id; return t;
 }
 function nextDate(date, rep) {
   const c = parseEvery(rep);
@@ -826,6 +828,9 @@ function normalise() {
   if (!S.tasks) S.tasks = { _u: 0, list: [] };
   if (!S.res || !Array.isArray(S.res.list)) S.res = { _u: 0, list: [] };
   if (!Array.isArray(S.tasks.list)) S.tasks.list = [];
+  /* GAMSAT-only: uni & life live in Todoist now, so the other lists go (once) */
+  if (!c.gOnly) { const keep = c.cats.filter(x => x.id === 'gamsat' || /gamsat/i.test(x.name)); if (!keep.length) keep.push({ id: 'gamsat', name: 'GAMSAT', h: 350 });
+    const gone = c.cats.filter(x => !keep.includes(x)); c.gOnly = true; if (gone.length) { c.cats = keep; c.removedCats = gone.map(x => x.name); } } // no touch(): a stale device must not win over newer remote data; it re-applies on every merge and saves with the next edit
   for (const t of S.tasks.list) { if (!Array.isArray(t.subs)) t.subs = []; if (t.due === undefined && t.imp && !t.date && !t.done) t.due = addDays(t.imp, 6); }
   for (const tp of c.topics) if (tp.conf > 4) tp.conf = 4;
   S.months = S.months || {}; S.archive = S.archive || {};
@@ -1046,9 +1051,10 @@ function vTasks() {
     today: all.filter(t => t.date === T),
     upcoming: all.filter(t => !t.done && t.date && t.date > T),
     someday: all.filter(t => !t.done && !t.date),
+    orphans: orphans(),
     done: all.filter(t => t.done).sort((a, b) => b.doneAt - a.doneAt).slice(0, 80),
   };
-  const labels = { overdue: 'Overdue', today: 'Today', upcoming: 'Upcoming', someday: 'No date', done: 'Done' };
+  const labels = { overdue: 'Overdue', today: 'Today', upcoming: 'Upcoming', someday: 'No date', done: 'Done' }; if (f === 'orphans' && !groups.orphans.length) UI.taskFilter = 'overdue';
   let list = groups[f].filter(match);
   let body;
   if (f === 'upcoming') {
@@ -1058,9 +1064,10 @@ function vTasks() {
   const archived = Object.values(S.archive).reduce((a, x) => a + x.list.length, 0);
   return header('Everything on your plate', 'Tasks', `<span><b>${groups.overdue.length}</b> overdue</span><span><b>${groups.today.filter(t => !t.done).length}</b> left today</span><span><b>${groups.upcoming.length}</b> upcoming</span>`,
     `<input class="in" style="width:220px" placeholder="Search tasks" value="${esc(UI.taskQ)}" data-inp="taskQ" id="task-q">`) +
-    `<div class="chip-row">${Object.keys(labels).map(k => `<button class="fchip ${f === k ? 'on' : ''}" data-act="tf" data-f="${k}">${labels[k]}<span class="n">${groups[k].length}</span></button>`).join('')}</div>
-    <div class="chip-row"><button class="fchip ${!cf ? 'on' : ''}" data-act="tc" data-c="">All lists</button><button class="fchip ${cf === '_gamsat' ? 'on' : ''}" data-act="tc" data-c="_gamsat">GAMSAT (all sections)</button>${cats().map(c => `<button class="fchip ${cf === c.id ? 'on' : ''}" data-act="tc" data-c="${c.id}"><span class="dot" style="--h:${c.h}"></span> ${esc(c.name)}</button>`).join('')}</div>
-    <section class="card flat"><div class="addrow"><input class="in" id="tasks-add" placeholder="Add a task… &quot;Case study notes fri !1 #uni 45m&quot;" data-enter="addTasks"><button class="btn pri sm" data-act="addTasks">Add</button></div>
+    `<div class="chip-row">${Object.keys(labels).concat(groups.orphans.length ? ['orphans'] : []).map(k => `<button class="fchip ${f === k ? 'on' : ''}" data-act="tf" data-f="${k}">${labels[k] || 'Removed lists'}<span class="n">${groups[k].length}</span></button>`).join('')}</div>
+    ${cats().length > 1 ? `<div class="chip-row"><button class="fchip ${!cf ? 'on' : ''}" data-act="tc" data-c="">All lists</button><button class="fchip ${cf === '_gamsat' ? 'on' : ''}" data-act="tc" data-c="_gamsat">GAMSAT (all sections)</button>${cats().map(c => `<button class="fchip ${cf === c.id ? 'on' : ''}" data-act="tc" data-c="${c.id}"><span class="dot" style="--h:${c.h}"></span> ${esc(c.name)}</button>`).join('')}</div>` : ''}
+    ${(() => { const n = orphans().length; return n ? `<div class="card flat row" style="justify-content:space-between;background:var(--sunk)"><span class="small"><b>${n} unfinished task${n > 1 ? 's' : ''}</b> from lists you removed (${esc((S.core.removedCats || []).join(', ') || 'old lists')}). Move ${n > 1 ? 'them' : 'it'} to Todoist, then clear ${n > 1 ? 'them' : 'it'} here.</span><span class="row"><button class="btn sm" data-act="tf" data-f="orphans">Show</button><button class="btn sm danger" data-act="orphanDel">Delete ${n > 1 ? 'them' : 'it'}</button></span></div>` : ''; })()}
+    <section class="card flat"><div class="addrow"><input class="in" id="tasks-add" placeholder="Add a task… &quot;S3 organic chem notes fri !1 45m&quot;" data-enter="addTasks"><button class="btn pri sm" data-act="addTasks">Add</button></div>
     ${f === 'overdue' && groups.overdue.length ? `<div class="row"><button class="btn sm soft" data-act="moveAll">Move all ${groups.overdue.length} to today</button><button class="btn sm" data-act="moveAllTmr">Push all to tomorrow</button></div>` : ''}
     ${body}${f === 'done' && archived ? `<p class="small muted">${archived} older completed tasks are archived. They're included when you export.</p>` : ''}</section>`;
 }
@@ -1838,7 +1845,7 @@ const ROUTINE = [
     ['Type your exact test dates and key dates once ACER registration opens (Nov).', 'GAMSAT → This week', 'goTab', 'week'],
     ['Load your syllabus from your Notion workbooks.', 'GAMSAT → Content', 'goTab', 'content'],
     ['Set your pace dates and diagnostic paces.', 'GAMSAT → Practice', 'goTab', 'practice'],
-    ['Add your uni and placement timetable as repeating blocks (tap a block, pick days).', 'Week calendar', 'goPlan', 'week'],
+    ['Uni, placement and life go in Todoist and Google Calendar. Only GAMSAT lives here.', '', '', ''],
     ['Clear the example content and add your own habits.', 'Customise', 'go', 'settings'],
     ['On your phone: open this page, then Share → Add to Home Screen.', '', '', ''],
   ]],
@@ -1846,14 +1853,14 @@ const ROUTINE = [
     ['Open the Weekly Scaffold. It walks you through everything below in order.', 'Open Scaffold', 'scaffold', ''],
     ['Reflect on last week: what went well, what didn\'t, why.', '', '', ''],
     ['Run your calculator, then type this week\'s S1 / S2 / S3 hours.', '', '', ''],
-    ['Plan my week: import this week from your Game Plan doc.', 'Plan my week', 'impOpen', ''],
-    ['Week calendar: drag everything in “To schedule” onto a time.', 'Week calendar', 'goPlan', 'week'],
+    ['Plan my week: import this week from your Game Plan doc, with “Pick days & times for me” off.', 'Plan my week', 'impOpen', ''],
+    ['In Google Calendar, block GAMSAT sessions around your placement roster. Name each by section, e.g. “GAMSAT S3”.', '', '', ''],
     ['Clear your review queue.', 'Review queue', 'goContent', ''],
   ]],
   ['morning', 'Every morning', '5 minutes', [
     ['Today: sort anything overdue. Move it to today, push it to tomorrow, or delete it.', 'Today', 'go', 'today'],
     ['Star your Top 3 for the day.', '', '', ''],
-    ['Check today\'s time blocks. Drag anything unplanned onto a time.', 'Day calendar', 'goPlan', 'day'],
+    ['Check Google Calendar for today\'s GAMSAT block.', '', '', ''],
     ['Quick check-in: sleep, mood, energy.', '', '', ''],
   ]],
   ['during', 'Starting a GAMSAT session', '30 seconds', [
@@ -2074,7 +2081,7 @@ function planImport() {
 }
 function importSheet() {
   const T = today();
-  if (!IMP) IMP = { mode: 'doc', week: null, rows: [], replace: true, status: '', busy: false };
+  if (!IMP) IMP = { mode: 'doc', week: null, rows: [], replace: true, status: '', busy: false, auto: false };
   const g = S.core.settings.gamsat;
   const doc = g.planDoc;
   let head = sheetHead('Plan my week');
@@ -2254,7 +2261,7 @@ function habitSheet(id) {
     <div class="row" style="justify-content:space-between">${id ? `<div class="row"><button class="btn danger" data-act="habitDel" data-id="${id}">Delete</button><button class="btn" data-act="habitArch" data-id="${id}">Archive</button></div>` : '<span></span>'}<button class="btn pri" data-act="habitSave" data-id="${id || ''}">Save</button></div>`);
 }
 function projSheet(id) {
-  const p = id ? S.core.projects.find(x => x.id === id) : { title: '', cat: 'uni', due: addDays(today(), 14), notes: '' };
+  const p = id ? S.core.projects.find(x => x.id === id) : { title: '', cat: gamsatCat() ? gamsatCat().id : '', due: addDays(today(), 14), notes: '' };
   openSheet(sheetHead(id ? 'Edit project' : 'New project') + `
     <input class="in" id="pj-t" style="font-size:17px" value="${esc(p.title)}" placeholder="e.g. Case study: adult aphasia" autofocus>
     <div class="grid2"><div class="field"><span class="lab">Due</span><input type="date" class="in" id="pj-d" value="${p.due || ''}"></div><div class="field"><span class="lab">List</span>${catSelect(p.cat, 'id="pj-c"')}</div></div>
@@ -2354,7 +2361,7 @@ function focusSheet() {
   openSheet(sheetHead('Focus') + `
     <div class="chip-row">${[15, 25, 45, 60, 90].map(m => `<button class="fchip ${F.dur === m ? 'on' : ''}" data-act="fDur" data-m="${m}" ${F.running ? 'disabled' : ''}>${m}m</button>`).join('')}</div>
     <div class="ring"><svg viewBox="0 0 220 220"><circle cx="110" cy="110" r="96" fill="none" stroke="var(--sunk)" stroke-width="10"/><circle id="f-arc" cx="110" cy="110" r="96" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct)}"/></svg><div class="t"><div><b id="f-time">${toClock(F.left)}</b><div class="lab">${F.running ? 'focus' : 'ready'}</div></div></div></div>
-    <div class="grid2"><div class="field"><span class="lab">Counts towards</span><select class="in" id="f-sec" data-ch="fSec"><option value="S1" ${F.sec === 'S1' ? 'selected' : ''}>GAMSAT S1</option><option value="S2" ${F.sec === 'S2' ? 'selected' : ''}>GAMSAT S2</option><option value="S3" ${F.sec === 'S3' ? 'selected' : ''}>GAMSAT S3</option><option value="" ${!F.sec ? 'selected' : ''}>Other (uni, placement…)</option></select></div>
+    <div class="grid2"><div class="field"><span class="lab">Counts towards</span><select class="in" id="f-sec" data-ch="fSec"><option value="S1" ${F.sec === 'S1' ? 'selected' : ''}>GAMSAT S1</option><option value="S2" ${F.sec === 'S2' ? 'selected' : ''}>GAMSAT S2</option><option value="S3" ${F.sec === 'S3' ? 'selected' : ''}>GAMSAT S3</option><option value="" ${!F.sec ? 'selected' : ''}>Other (not counted)</option></select></div>
     <div class="field"><span class="lab">Working on</span><input class="in" id="f-label" value="${esc(F.label)}" placeholder="e.g. Kinematics problems" data-ch="fLabel"></div></div>
     <div class="row" style="justify-content:center"><button class="btn" data-act="fReset">Reset</button><button class="btn pri" data-act="fToggle" style="min-width:120px">${F.running ? 'Pause' : F.left < F.dur * 60 ? 'Resume' : 'Start'}</button>${F.running || F.left < F.dur * 60 ? `<button class="btn" data-act="fFinish">Finish & log</button>` : ''}</div>
     <p class="small muted" style="text-align:center">Sessions are logged automatically and add up in your GAMSAT study hours.</p>`);
@@ -2417,6 +2424,7 @@ const ACT = {
   addPlan: el => { const d = el.dataset.date; const p = parseQuick(el.value, d); if (!p.title) return; S.tasks.list.push(newTask({ title: p.title, date: p.date || d, cat: p.cat, sec: p.sec, pri: p.pri, est: p.est })); commit('tasks'); const n = document.querySelector(`[data-enter="addPlan"][data-date="${d}"]`); if (n) n.focus(); },
   addChunk: el => addTaskFrom('chunk-add', null, { force: { projectId: el.dataset.id, cat: (S.core.projects.find(p => p.id === el.dataset.id) || {}).cat || '' } }),
   addG: () => { const sec = val('g-sec'); addTaskFrom('g-add', today(), { force: { cat: gamsatCat() ? gamsatCat().id : '', ...(sec ? { sec } : {}) } }); },
+  orphanDel: () => withUndo('Deleted tasks from removed lists', ['tasks'], () => { const o = new Set(orphans()); S.tasks.list = S.tasks.list.filter(t => !o.has(t)); UI.taskFilter = 'overdue'; commit('tasks'); }),
   moveAll: () => withUndo('Moved to today', ['tasks'], () => { for (const t of overdue()) t.date = today(); commit('tasks'); }),
   moveAllTmr: () => withUndo('Pushed to tomorrow', ['tasks'], () => { const tm = addDays(today(), 1); for (const t of overdue()) t.date = tm; commit('tasks'); }),
   moveAllG: () => withUndo('Moved to today', ['tasks'], () => { for (const t of overdue().filter(isGamsat)) t.date = today(); commit('tasks'); }),
