@@ -587,7 +587,7 @@ function mergeRemote(docs, initial) {
     else if (initial && (l._u || 0) > (r._u || 0)) dirty.add(key);
   }
   if (initial) { for (const k of allKeys()) if (!seen.has(k) && getDoc(k) && getDoc(k)._u) dirty.add(k); if (dirty.size) schedRemote(300); }
-  if (changed) { normalise(); const dd = booted ? dedupeResources() : 0; saveLocal(); if (booted) safeRender(); if (dd) toast(`Merged ${dd} duplicate resource${dd > 1 ? 's' : ''}`); }
+  if (changed) { normalise(); if (booted) linkBlocks(); const dd = booted ? dedupeResources() : 0; saveLocal(); if (booted) safeRender(); if (dd) toast(`Merged ${dd} duplicate resource${dd > 1 ? 's' : ''}`); }
 }
 async function initRemote() {
   try {
@@ -829,6 +829,13 @@ function normalise() {
   S.months = S.months || {}; S.archive = S.archive || {};
 }
 /* keep the tasks document well under the 256 KiB document cap by archiving old completed tasks */
+function linkBlocks() {
+  const norm = x => (x || '').trim().toLowerCase(); const byDay = {};
+  for (const t of S.tasks.list) if (t.date && !t.done) (byDay[t.date] = byDay[t.date] || []).push(t);
+  for (const [mk, m] of Object.entries(S.months)) { let ch = false;
+    for (const [d, x] of Object.entries(m.days)) for (const b of (x.blocks || [])) { if (b.taskId) continue; const t = (byDay[d] || []).find(t => norm(t.title) === norm(b.t) && !(x.blocks || []).some(o => o.taskId === t.id)); if (t) { b.taskId = t.id; ch = true; } }
+    if (ch) touch('m:' + mk); }
+}
 function maybeArchive() {
   if (JSON.stringify(S.tasks).length < 170000) return;
   const cutoff = Date.now() - 45 * 864e5; const keep = [];
@@ -2324,8 +2331,8 @@ function qaPreview() {
 function qaGo() {
   const v = $('#qa').value.trim(); if (!v) return;
   const base = UI.view === 'today' ? UI.date : today();
-  if (QA.type === 'task') { const p = parseQuick(v, base); if (!p.title) return; S.tasks.list.push(newTask({ title: p.title, date: p.date || base, cat: p.cat, sec: p.sec, pri: p.pri, est: p.est })); touch('tasks');
-    if (p.time) { const d = day(p.date || base, true); (d.blocks = d.blocks || []).push({ id: uid(), s: p.time, e: toTime(toMin(p.time) + (p.est || 60)), t: p.title, cat: p.cat }); touch(dayKey(p.date || base)); }
+  if (QA.type === 'task') { const p = parseQuick(v, base); if (!p.title) return; const nt = newTask({ title: p.title, date: p.date || base, cat: p.cat, sec: p.sec, pri: p.pri, est: p.est }); S.tasks.list.push(nt); touch('tasks');
+    if (p.time) { const d = day(p.date || base, true); (d.blocks = d.blocks || []).push({ id: uid(), s: p.time, e: toTime(Math.min(toMin(p.time) + (p.est || 60), 23 * 60 + 59)), t: p.title, cat: p.cat, taskId: nt.id }); touch(dayKey(p.date || base)); }
     toast(`Added to ${p.date && p.date !== today() ? fmtShort(p.date) : 'today'}`); }
   else if (QA.type === 'block') { const p = parseQuick(v, base); const s = p.time || '09:00'; const d = p.date || base; const dd = day(d, true); (dd.blocks = dd.blocks || []).push({ id: uid(), s, e: toTime(Math.min(toMin(s) + (p.est || 60), 23 * 60 + 59)), t: p.title, cat: p.cat }); touch(dayKey(d)); toast(`Blocked ${s} on ${fmtShort(d)}`); }
   else if (QA.type === 'note') { const d = day(today(), true); d.refl = d.refl || {}; d.refl.free = (d.refl.free ? d.refl.free + '\n' : '') + v; touch(dayKey(today())); toast("Saved to today's reflection"); }
@@ -2713,7 +2720,7 @@ async function boot() {
   try { const raw = localStorage.getItem(LS); if (raw) { const j = JSON.parse(raw); if (j && j.core) S = { core: j.core, tasks: j.tasks, res: j.res || null, months: j.months || {}, archive: j.archive || {} }; } } catch (e) {}
   try { const u = JSON.parse(localStorage.getItem(LSUI) || '{}'); Object.assign(UI, { view: u.view || 'today', taskFilter: u.taskFilter || 'today', planMode: u.planMode || 'week', gTab: u.gTab || 'week' }); } catch (e) {}
   UI.lastSeen = today();
-  if (S.core) { normalise(); maybeArchive(); const dd = dedupeResources(); booted = true; render(); if (dd) toast(`Merged ${dd} duplicate resource${dd > 1 ? 's' : ''}`); initRemote(); return; }
+  if (S.core) { normalise(); maybeArchive(); linkBlocks(); const dd = dedupeResources(); booted = true; render(); if (dd) toast(`Merged ${dd} duplicate resource${dd > 1 ? 's' : ''}`); initRemote(); return; }
   applyLook();
   await initRemote();
   if (S.core) { normalise(); maybeArchive(); booted = true; render(); } else welcome();
