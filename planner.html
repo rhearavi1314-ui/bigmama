@@ -72,6 +72,7 @@
 }
 
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
@@ -92,7 +93,7 @@ ul{list-style:none;margin:0;padding:0}
 .nav:hover{background:var(--sunk);color:var(--ink)}
 .nav.on{background:var(--accent-soft);color:var(--accent-ink)}
 .nav svg{width:18px;height:18px;flex:none}
-.nav .cnt{margin-left:auto;font-family:var(--f-mono);font-size:11px;background:var(--bad-soft);color:var(--bad);border-radius:20px;padding:1px 7px}
+.nav .cnt{margin-left:auto}
 .sync{margin-top:auto;padding:0 10px;display:flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .sync i{width:7px;height:7px;border-radius:50%;background:var(--faint)}
 .sync.synced i{background:var(--good)} .sync.saving i{background:var(--warn)} .sync.offline i{background:var(--bad)}
@@ -170,6 +171,18 @@ textarea.in{resize:vertical;min-height:70px;line-height:1.5}
 .secpill.S1{background:var(--s1)} .secpill.S2{background:var(--s2)} .secpill.S3{background:var(--s3)}
 .evs{display:flex;flex-wrap:wrap;gap:6px}
 .ev{font-size:12px;border-radius:7px;padding:3px 8px;background:var(--sunk);border:1px dashed var(--faint);color:var(--ink);text-align:left}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{padding:10px 14px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
+.tabs button.on{color:var(--ink);border-color:var(--accent)}
+.cnt{font-family:var(--f-mono);font-size:11px;background:var(--bad-soft);color:var(--bad);border-radius:20px;padding:1px 7px}
+.cnt.acc{background:var(--accent-soft);color:var(--accent-ink)}
+.glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.gl{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
+.gl:hover{border-color:var(--faint)}
+.gl b{font-family:var(--f-display);font-weight:400;font-size:28px;line-height:1.05;font-variant-numeric:tabular-nums}
+.gl span{font-size:12.5px;color:var(--muted)}
+.gl.alert{background:var(--bad-soft);border-color:transparent}.gl.alert b{color:var(--bad)}
+.gl.good b{color:var(--good)}
 .carry{background:var(--bad-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
 .carry .chead{font-size:13px}
 .carry .task{border-color:color-mix(in oklch,var(--bad) 18%,transparent)}
@@ -288,7 +301,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .tbl th{font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:400;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .tbl td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top;font-variant-numeric:tabular-nums}
 .conf{display:inline-flex;gap:3px}
-.conf button{width:22px;height:22px;border-radius:6px;border:1px solid var(--line);font-size:11px;font-family:var(--f-mono);color:var(--muted)}
+.conf button{min-width:22px;padding:0 6px;height:24px;white-space:nowrap;border-radius:6px;border:1px solid var(--line);font-size:11px;font-family:var(--f-mono);color:var(--muted)}
 .conf button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 
 /* sheet */
@@ -428,7 +441,7 @@ const FONTS = {
 const SECS = { S1: 'Reasoning in Humanities & Social Sciences', S2: 'Written Communication', S3: 'Reasoning in Biological & Physical Sciences' };
 const CARDS = { top3: 'Top 3 priorities', todo: 'To-do list', schedule: 'Time blocks', habits: 'Habits', checkin: 'Check-in', gamsat: 'GAMSAT', projects: 'Projects', reflect: 'Reflection' };
 const REPEATS = { '': 'Does not repeat', daily: 'Every day', weekdays: 'Every weekday', weekly: 'Every week', fortnightly: 'Every 2 weeks', monthly: 'Every month' };
-const REVIEW_GAP = [0, 1, 3, 7, 14, 30];
+const REVIEW_GAP = [0, 1, 4, 14, 30, 30];
 
 const TEMPLATES = {
   litreview: { name: 'Literature review', steps: [['Read the brief and marking rubric', 30], ['Define question & search terms (PICO)', 30], ['Search databases (CINAHL, PubMed, speechBITE)', 90], ['Screen and select articles', 60], ['Read & take notes: first half of articles', 120], ['Read & take notes: second half', 120], ['Synthesise themes in a table', 60], ['Outline against the rubric', 45], ['Draft introduction', 60], ['Draft body sections', 150], ['Draft conclusion & implications', 45], ['Edit against rubric', 60], ['Reference check (APA 7)', 30], ['Final proofread and submit', 30]] },
@@ -472,7 +485,7 @@ const dayKey = date => 'm:' + mkey(date);
 
 let localTimer;
 function saveLocal() { clearTimeout(localTimer); localTimer = setTimeout(() => { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} }, 250); }
-function saveUI() { try { localStorage.setItem(LSUI, JSON.stringify({ view: UI.view, taskFilter: UI.taskFilter, planMode: UI.planMode })); } catch (e) {} }
+function saveUI() { try { localStorage.setItem(LSUI, JSON.stringify({ view: UI.view, taskFilter: UI.taskFilter, planMode: UI.planMode, gTab: UI.gTab })); } catch (e) {} }
 function touch(...keys) {
   const now = Date.now();
   for (const k of keys) { const d = getDoc(k); if (!d) continue; d._u = now; dirty.add(k); }
@@ -750,6 +763,7 @@ function normalise() {
   if (!S.tasks) S.tasks = { _u: 0, list: [] };
   if (!Array.isArray(S.tasks.list)) S.tasks.list = [];
   for (const t of S.tasks.list) { if (!Array.isArray(t.subs)) t.subs = []; }
+  for (const tp of c.topics) if (tp.conf > 4) tp.conf = 4;
   S.months = S.months || {}; S.archive = S.archive || {};
 }
 /* keep the tasks document well under the 256 KiB document cap by archiving old completed tasks */
@@ -787,10 +801,12 @@ const NAV = [
   ['You', [['settings', 'Customise']]],
 ];
 function renderSide() {
-  const od = overdue().length;
+  const od = overdue().length, T = today();
+  const rq = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp))).length;
+  const hl = S.core.habits.filter(h => !h.archived && habitDue(h, T) && !ticked(h, T) && h.freq.type !== 'times').length;
   $('#side').innerHTML = `<div class="brand"><i></i><b>Bloom</b></div>
     <button class="btn pri" data-act="quick">${ICON.plus} Quick add <kbd style="color:inherit;border-color:currentColor;opacity:.7">${/Mac|iP/.test(navigator.platform) ? '⌘' : 'Ctrl'} K</kbd></button>
-    ${NAV.map(([g, items]) => `<div class="navg"><span class="lab">${g}</span>${items.map(([v, l]) => `<button class="nav ${UI.view === v ? 'on' : ''}" data-act="go" data-v="${v}">${ICON[v === 'settings' ? 'settings' : v]}${l}${v === 'tasks' && od ? `<span class="cnt">${od}</span>` : ''}</button>`).join('')}</div>`).join('')}
+    ${NAV.map(([g, items]) => `<div class="navg"><span class="lab">${g}</span>${items.map(([v, l]) => `<button class="nav ${UI.view === v ? 'on' : ''}" data-act="go" data-v="${v}">${ICON[v === 'settings' ? 'settings' : v]}${l}${v === 'tasks' && od ? `<span class="cnt" title="overdue">${od}</span>` : ''}${v === 'gamsat' && rq ? `<span class="cnt acc" title="to re-review">${rq}</span>` : ''}${v === 'habits' && hl ? `<span class="cnt acc" title="habits left today">${hl}</span>` : ''}</button>`).join('')}</div>`).join('')}
     <button class="nav" data-act="focus">${ICON.timer}Focus timer</button>
     <div class="sync ${syncState}" id="sync"><i></i><span>${syncLabel()}</span></div>`;
   const tabs = [['today', 'Today'], ['tasks', 'Tasks'], null, ['gamsat', 'GAMSAT'], ['more', 'More']];
@@ -834,13 +850,24 @@ function vToday() {
   const gd = S.core.settings.gamsat.date; const left = gd ? diffDays(T, gd) : null;
   const name = S.core.settings.name;
   const title = isT ? `${greet()}${name ? `, <em>${esc(name)}</em>` : ''}.` : esc(fmt(D, { weekday: 'long' })) + (D < T ? ' <em>past</em>' : '');
-  const sub = [`<span><b>${done}</b> of ${list.length} tasks done</span>`, hs.length ? `<span><b>${hDone}/${hs.length}</b> habits</span>` : '', fm ? `<span><b>${fmtMin(fm)}</b> focused</span>` : '', left != null && left >= 0 ? `<span>GAMSAT in <b>${left}</b> days</span>` : ''].filter(Boolean).join('');
+  const sub = [left != null && left >= 0 ? `<span>GAMSAT in <b>${left}</b> days</span>` : '', fm ? `<span><b>${fmtMin(fm)}</b> focused today</span>` : ''].filter(Boolean).join('');
   const ex = S.core.settings.hasExamples ? `<div class="card flat" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--accent-soft);border-color:transparent"><span class="small">You're looking at <b>example content</b> so you can see how everything works. Items marked <span class="ex">example</span> go away in one tap.</span><button class="btn sm" data-act="clearEx">Clear examples</button></div>` : '';
   const nextMon = addDays(mondayOf(T), 7), gs = S.core.settings.gamsat;
   const planBanner = isT && (wd(T) === 0 || wd(T) === 6) && !(gs.imported && gs.imported[nextMon]) ? `<div class="card flat" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap"><span><b>It's the weekend.</b> <span class="muted">Plan next week (from ${fmtShort(nextMon)})${gs.planDoc ? ' from your Game Plan' : ''}.</span></span><button class="btn pri sm" data-act="impOpen">Plan my week</button></div>` : '';
   const cards = S.core.settings.cards.filter(c => c.on).map(c => CARD[c.id](D)).join('');
+  const odN = isT ? overdue().length : 0, wk = mondayOf(D), gl = goalFor(wk), wm = focusIn(wk, addDays(wk, 6), f => !!f.sec);
+  const rq = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp))).length;
+  const nextBlock = isT ? blocksOn(D).find(b => toMin(b.e) > new Date().getHours() * 60 + new Date().getMinutes()) : null;
+  const glance = `<div class="glance">
+    ${isT ? `<button class="gl ${odN ? 'alert' : 'good'}" data-act="goTasks" data-f="overdue"><b>${odN || '✓'}</b><span>${odN ? `overdue task${odN > 1 ? 's' : ''} · sort them` : 'nothing overdue'}</span></button>` : ''}
+    <button class="gl" data-act="scrollTo" data-to="todo"><b>${done}/${list.length}</b><span>tasks done ${isT ? 'today' : ''}</span></button>
+    ${nextBlock ? `<button class="gl" data-act="scrollTo" data-to="schedule"><b style="font-size:20px;line-height:1.3">${nextBlock.s}</b><span>${toMin(nextBlock.s) <= new Date().getHours() * 60 + new Date().getMinutes() ? 'now' : 'next'}: ${esc(nextBlock.t)}</span></button>` : ''}
+    ${gl ? `<button class="gl" data-act="go" data-v="gamsat"><b>${(wm / 60).toFixed(1)}<small style="font-size:15px">/${gl}h</small></b><span>GAMSAT this week</span></button>` : ''}
+    ${rq ? `<button class="gl" data-act="goContent"><b>${rq}</b><span>topic${rq > 1 ? 's' : ''} to re-review</span></button>` : ''}
+    ${hs.length ? `<button class="gl ${hDone === hs.length ? 'good' : ''}" data-act="scrollTo" data-to="habits"><b>${hDone}/${hs.length}</b><span>habits</span></button>` : ''}
+  </div>`;
   return header(esc(fmtLong(D)) + (isT ? '' : ` · <button class="link" data-act="day" data-d="0">back to today</button>`), title, sub,
-    `${dateNav('day')}<input type="date" class="in" style="width:auto" value="${D}" data-ch="pickDay" aria-label="Pick a date"><button class="btn sm" data-act="go" data-v="settings">Customise</button>`) + planBanner + ex + `<div class="cols">${cards}</div>`;
+    `${dateNav('day')}<input type="date" class="in" style="width:auto" value="${D}" data-ch="pickDay" aria-label="Pick a date"><button class="btn sm" data-act="go" data-v="settings">Customise</button>`) + glance + planBanner + ex + `<div class="cols">${cards}</div>`;
 }
 function taskRow(t, o = {}) {
   const T = today(); const od = !t.done && t.date && t.date < T;
@@ -861,18 +888,18 @@ const CARD = {
     const T = today(), isT = D === T;
     const od = isT ? sortTasks(overdue()) : [];
     const list = sortTasks(tasksOn(D).filter(t => !t.top));
-    return `<section class="card"><div class="chead"><h3>To-do</h3><span class="lab">${tasksOn(D).filter(t => t.done).length}/${tasksOn(D).length} done</span></div>
+    return `<section class="card" id="card-todo"><div class="chead"><h3>To-do</h3><span class="lab">${tasksOn(D).filter(t => t.done).length}/${tasksOn(D).length} done</span></div>
       ${od.length ? `<div class="carry"><div class="chead"><span class="over">${od.length} carried over</span><button class="link" data-act="moveAll">Move all to today</button></div><ul class="tasks">${od.map(t => taskRow(t)).join('')}</ul></div>` : ''}
       <ul class="tasks">${list.map(t => taskRow(t)).join('') || (od.length ? '' : '<li class="empty">Nothing here yet.</li>')}</ul>
       <div class="addrow"><input class="in" id="todo-add" placeholder="Add a task… try &quot;S3 flashcards 30m #gamsat&quot;" data-enter="addTodo"><button class="btn sm" data-act="addTodo">Add</button></div></section>`;
   },
   schedule(D) {
     const ev = day(D).events || [];
-    return `<section class="card"><div class="chead"><h3>Time blocks</h3><button class="link" data-act="blockNew" data-date="${D}">+ Block time</button></div>${ev.length ? `<div class="evs">${ev.map(e => `<button class="ev" data-act="evDel" data-id="${e.id}" data-date="${D}" title="All day · tap to remove">${esc(e.t)}</button>`).join('')}</div>` : ''}${timeline(D)}</section>`;
+    return `<section class="card" id="card-schedule"><div class="chead"><h3>Time blocks</h3><button class="link" data-act="blockNew" data-date="${D}">+ Block time</button></div>${ev.length ? `<div class="evs">${ev.map(e => `<button class="ev" data-act="evDel" data-id="${e.id}" data-date="${D}" title="All day · tap to remove">${esc(e.t)}</button>`).join('')}</div>` : ''}${timeline(D)}</section>`;
   },
   habits(D) {
     const hs = S.core.habits.filter(h => !h.archived && habitDue(h, D));
-    return `<section class="card"><div class="chead"><h3>Habits</h3><button class="link" data-act="go" data-v="habits">Tracker</button></div>
+    return `<section class="card" id="card-habits"><div class="chead"><h3>Habits</h3><button class="link" data-act="go" data-v="habits">Tracker</button></div>
       <div>${hs.map(h => { const s = streak(h); const wk = h.freq.type === 'times' ? `${weekCount(h, weekStartOf(D))}/${h.freq.n} this week` : freqLabel(h); return `<div class="hrow" style="--h:${h.h}"><button class="hbtn ${ticked(h, D) ? 'on' : ''}" data-act="habit" data-id="${h.id}" data-date="${D}" aria-label="Tick ${esc(h.name)}"></button><div class="hn">${esc(h.name)}<small>${wk}</small></div><span class="streak">${s.n} ${s.unit}</span></div>`; }).join('') || '<p class="empty">No habits due. <button class="link" data-act="habitNew">Add a habit</button></p>'}</div></section>`;
   },
   checkin(D) {
@@ -1014,6 +1041,14 @@ function vProject(p) {
 
 /* ============================== GAMSAT ============================== */
 function topicDue(tp) { return addDays(tp.last || today(), REVIEW_GAP[tp.conf] || 7); }
+const gH = t => (UI.gTab || 'week') === t ? '' : 'hidden';
+function gTabs() {
+  const T = today(); const tab = UI.gTab || 'week';
+  const od = overdue().filter(isGamsat).length;
+  const q = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp))).length;
+  const tabs = [['week', 'This week', od ? `<span class="cnt">${od}</span>` : ''], ['content', 'Content', q ? `<span class="cnt acc">${q}</span>` : ''], ['practice', 'Practice', '']];
+  return `<div class="tabs" role="tablist">${tabs.map(([k, l, b]) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-act="gTab" data-v="${k}">${l}${b}</button>`).join('')}</div>`;
+}
 function vGamsat() {
   const T = today(), g = S.core.settings.gamsat; const left = g.date ? diffDays(T, g.date) : null;
   const ws = weekStartOf(T); const we = addDays(ws, 6);
@@ -1025,8 +1060,9 @@ function vGamsat() {
   const sc = S.core.scores.slice().sort((a, b) => a.date < b.date ? -1 : 1);
   const overall = s => (s.s1 != null && s.s2 != null && s.s3 != null && s.s1 !== '' && s.s2 !== '' && s.s3 !== '') ? Math.round((+s.s1 + +s.s2 + 2 * +s.s3) / 4 * 10) / 10 : null;
   return header('Study hub', 'GAMSAT', left != null ? `<span>Test day <b>${fmtLong(g.date)}</b></span><span><b>${fmtMin(allMin())}</b> logged in total</span>` : '<span>Add your sitting date to start the countdown.</span>',
-    `<button class="btn soft" data-act="impOpen">Plan my week</button><button class="btn pri" data-act="focus">${ICON.timer} Start a study session</button>`) +
-    `<div class="sec-grid">
+    `<button class="btn soft" data-act="impOpen">Plan my week</button><button class="btn soft" data-act="mistakeNew">Log a wrong answer</button><button class="btn pri" data-act="focus">${ICON.timer} Study session</button>`) +
+    gTabs() +
+    `<div class="sec-grid" ${gH('week')}>
       <section class="card flat"><div class="chead"><h3>Countdown</h3></div>
         <div class="row" style="justify-content:space-between;align-items:flex-end"><div class="stat"><span class="big">${left != null ? Math.max(0, left) : '—'}</span><span class="lab">days${left != null ? ` · ${Math.max(0, Math.floor(left / 7))} weeks` : ''}</span></div></div>
         <div class="grid2"><div class="field"><span class="lab">Sitting date</span><input type="date" class="in" value="${g.date}" data-ch="gDate"></div><div class="field"><span class="lab">Default weekly goal (h)</span><input type="number" min="0" max="80" class="in" value="${g.weekTarget}" data-ch="gTarget"></div></div></section>
@@ -1042,8 +1078,8 @@ function vGamsat() {
         ${up.length ? `<span class="lab">Next 7 days</span><ul class="tasks">${up.map(t => taskRow(t, { date: true })).join('')}</ul>` : ''}
         <div class="addrow"><select class="in" id="g-sec" style="flex:0 0 76px"><option>S1</option><option>S2</option><option selected>S3</option><option value="">Any</option></select><input class="in" id="g-add" placeholder="e.g. Buffers practice set tomorrow 45m" data-enter="addG"><button class="btn sm" data-act="addG">Add</button></div></section>
     </div>
-    ${contentTracker()}
-    <div class="sec-grid">
+    ${UI.gTab === 'content' ? contentTracker() : ''}
+    <div class="sec-grid" ${gH('practice')}>
       ${drillsCard()}
       <section class="card flat"><div class="chead"><h3>Practice scores</h3><button class="link" data-act="scoreNew">+ Log a test</button></div>
         ${scoreChart(sc)}
@@ -1052,7 +1088,7 @@ function vGamsat() {
         ${sc.slice().reverse().map(s => `<tr data-act="scoreEdit" data-id="${s.id}" style="cursor:pointer"><td>${fmtShort(s.date)}</td><td>${esc(s.src || '')}${s.ex ? ' <span class="ex">example</span>' : ''}</td><td>${s.s1 ?? '–'}</td><td>${s.s2 ?? '–'}</td><td>${s.s3 ?? '–'}</td><td><b>${overall(s) ?? '–'}</b></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No tests logged yet.</td></tr>'}</tbody></table></div>
         <p class="small muted">Overall uses ACER's weighting: (S1 + S2 + 2 × S3) ÷ 4. Practice-paper percentages are not scaled scores, so use this to track your trend, not to predict your result.</p></section>
     </div>
-    <section class="card flat"><div class="chead"><h3>Section II essay log</h3><button class="link" data-act="essayNew">+ Log an essay</button></div>
+    <section class="card flat" ${gH('practice')}><div class="chead"><h3>Section II essay log</h3><button class="link" data-act="essayNew">+ Log an essay</button></div>
       <div class="table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Task</th><th>Theme</th><th>Time</th><th>Words</th><th>Self-rating</th><th>Fix next time</th></tr></thead><tbody>
       ${S.core.essays.slice().sort((a, b) => a.date < b.date ? 1 : -1).map(e => `<tr data-act="essayEdit" data-id="${e.id}" style="cursor:pointer"><td>${fmtShort(e.date)}</td><td>${e.task}</td><td>${esc(e.theme)}${e.ex ? ' <span class="ex">example</span>' : ''}</td><td>${e.min ? e.min + 'm' : '–'}</td><td>${e.words || '–'}</td><td>${e.rating ? '●'.repeat(e.rating) + '○'.repeat(5 - e.rating) : '–'}</td><td style="min-width:220px">${esc(e.fix || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Log each timed essay with one concrete fix for next time. Patterns show up fast.</td></tr>'}</tbody></table></div></section>`;
 }
@@ -1167,6 +1203,40 @@ function vSettings() {
   </div>`;
 }
 
+/* syllabus from the No Bullshit GAMSAT workbooks in Notion: [#, concept, frequency, depth, needed-to-answer?] */
+const WORKBOOK = {
+  S3: {
+    Biology: [[1.01, 'Biomolecules + biological applications', 'Low', 2, 1], [1.02, 'Cell and membrane structure and function, homeostasis', 'Moderate', 2, 0], [1.03, 'Cell division', 'Moderate', 2, 1], [1.04, 'Gene expression and inheritance', 'Very high', 3, 1], [1.05, 'Cardiovascular system', 'Moderate', 1, 0], [1.06, 'Respiratory system', 'Moderate', 1, 0], [1.07, 'Gastrointestinal system', 'Moderate', 2, 0], [1.08, 'Renal system', 'Moderate', 1, 0], [1.09, 'Endocrine system', 'Low', 1, 0], [1.10, 'Immune system', 'High', 1, 0], [1.11, 'Reproductive systems', 'Low', 1, 0], [1.12, 'Nervous system', 'Minimal', 1, 0], [1.13, 'Musculoskeletal system', 'Minimal', 1, 0]],
+    Chemistry: [[2.01, 'Atoms and atomic structure', 'High', 2, 1], [2.02, 'Ionic, covalent, and metallic bonding', 'Moderate', 3, 1], [2.03, 'Periodic trends, electronegativity, polarity, 3D bond-line structures / molecule shapes', 'Moderate', 2, 1], [2.04, 'Intermolecular forces, solutions, solubility', 'Moderate', 3, 1], [2.05, 'Stoichiometry', 'High', 3, 1], [2.06, 'Kinetic gas theory, collision theory, reaction rate, diffusion', 'Low', 3, 1], [2.07, 'Equilibrium, reaction quotients (K + Q), Le Chatelier\'s principle', 'High', 2, 1], [2.08, 'Acids and bases, concentration, pH/pOH', 'Very high', 3, 1], [2.09, 'Acid-base calculations, logarithms, simple titrations', 'High', 3, 1], [2.10, 'Acid-base equilibrium (Ka, Kb, Kw), indicators, buffers', 'Moderate', 2, 1], [2.11, 'Organics: IUPAC naming and key organic reactions', 'Very high', 3, 1], [2.12, 'Organics: understanding structural representations', 'Very high', 3, 1], [2.13, 'Organics: resonance structures, orbitals influencing molecule shape', 'Low', 1, 0], [2.14, 'Biochemistry: amino acids, zwitterions, enzyme kinetics, lipids', 'High', 2, 0], [2.15, 'Stereochemistry: diastereomers, enantiomers, meso compounds', 'Moderate', 1, 0], [2.16, 'Stereochemistry: chirality, Haworth + Fischer projections', 'Moderate', 2, 0], [2.17, 'Electrochemistry (redox + cells)', 'Minimal', 1, 0], [2.18, 'Simple thermodynamics, enthalpy, entropy, Gibbs free energy', 'Low', 2, 1]],
+    Physics: [[3.01, 'Linear motion', 'High', 3, 1], [3.02, 'Newton\'s laws and forces', 'High', 3, 1], [3.03, 'Motion + torque', 'Minimal', 1, 0], [3.04, 'Physics of liquids', 'Minimal', 1, 0], [3.05, 'Waves', 'Moderate', 2, 0], [3.06, 'Optics + sound', 'High', 2, 0], [3.07, 'Electricity and magnetism', 'Low', 1, 0], [3.08, 'Electric circuits', 'Low', 2, 0], [3.09, 'Radiation and decay', 'Moderate', 2, 0]],
+    Maths: [[4.01, 'Fractions, proportions, and ratios', '', 3, 1], [4.02, 'Estimating, rounding, mental maths', '', 3, 1], [4.03, 'Scientific notation', '', 3, 1], [4.04, 'Algebra and rearranging equations', '', 3, 1], [4.05, 'Logs and exponents', '', 3, 1], [4.06, 'Dimensional analysis / unit conversions', '', 3, 1], [4.07, 'Linear and non-linear relationships', '', 2, 1], [4.08, 'Squares, roots, and surds', '', 2, 1], [4.09, 'Basic trigonometry (not assessed)', '', 1, 0]],
+  },
+  S1: {
+    'Thinking skills': [[1, 'Deduction, inference and generalisation'], [2, 'Synthesis, comparison and evaluation'], [3, 'Classification, categorisation and analysis'], [4, 'Pattern recognition & relational visualisation']],
+    'Stem types': [[5, 'Poetry'], [6, 'Literary prose'], [7, 'Drama text'], [8, 'Non-fiction'], [9, 'Opinion piece'], [10, 'Comments, quotes & proverbs'], [11, 'Cartoons & images'], [12, 'Graphs & diagrams'], [13, 'Rule sets']],
+  },
+  S2: { 'Essay rubric': [[1, 'Theme identification'], [2, 'POV quality'], [3, 'Analyser quality'], [4, 'Paragraph idea quality'], [5, 'Introduction'], [6, 'Body paragraphs'], [7, 'Conclusion'], [8, 'Style']] },
+};
+const NOTION_LINKS = { S1: 'https://app.notion.com/p/2ed7f52cc4ad82cfb17601457af66edb', S2: 'https://app.notion.com/p/5317f52cc4ad82b1821f81677126635a', S3: 'https://app.notion.com/p/9527f52cc4ad8277b0dd81326dc4e97f', syllabus: 'https://app.notion.com/p/dee7f52cc4ad82dd8c0f819c50b68b9b' };
+const FREQ = { Minimal: 0, Low: 1, Moderate: 2, High: 3, 'Very high': 4 };
+const DEPTH = ['', 'L1 minimal', 'L2 intuitive', 'L3 recall'];
+const UNDER = ['', 'Nil', 'Sub-optimal', 'At recommended', 'Over-optimal'];
+const topicYield = tp => (FREQ[tp.freq] ?? 2) * 2 + (tp.depth || 2) + (tp.needed ? 2 : 0) - (tp.status === 'todo' ? 0 : (tp.conf || 0) * 2);
+function loadWorkbook() {
+  const have = new Map(S.core.topics.map(t => [t.sec + '|' + t.name.toLowerCase(), t]));
+  // drop untouched generic starter topics
+  S.core.topics = S.core.topics.filter(t => !(t.starter && t.status === 'todo' && !t.misses));
+  let n = 0;
+  for (const [sec, areas] of Object.entries(WORKBOOK)) for (const [area, list] of Object.entries(areas)) for (const [num, name, freq, depth, needed] of list) {
+    const ex = have.get(sec + '|' + name.toLowerCase());
+    if (ex && !ex.starter) { Object.assign(ex, { area, num, freq: freq || ex.freq, depth: depth || ex.depth, needed: !!needed, wb: true }); continue; }
+    S.core.topics.push({ id: uid(), sec, area, name, num, freq: freq || '', depth: depth || 0, needed: !!needed, status: 'todo', conf: 0, last: today(), notes: '', misses: 0, wb: true }); n++;
+  }
+  S.core.settings.gamsat.wbLoaded = true;
+  UI.topicSec = 'S3'; UI.topicView = 'first';
+  commit('core'); toast(`${n} syllabus items added from your workbooks`);
+}
+
 /* ============================== content tracker, mistakes, drills ============================== */
 const S3_STARTER = {
   'Biology': ['Cell structure & organelles', 'Membranes & transport', 'Cellular respiration', 'Photosynthesis', 'DNA structure & replication', 'Transcription & translation', 'Mitosis & meiosis', 'Mendelian genetics & pedigrees', 'Enzymes & kinetics', 'Cardiovascular physiology', 'Respiratory physiology', 'Renal physiology', 'Nerves & action potentials', 'Endocrine system', 'Immune system', 'Digestion & absorption', 'Evolution & population genetics', 'Bacteria & viruses'],
@@ -1175,7 +1245,10 @@ const S3_STARTER = {
   'Physics': ['Kinematics', 'Forces & Newton\'s laws', 'Work, energy & power', 'Momentum & collisions', 'Circular motion & gravitation', 'Fluids & pressure', 'Waves & sound', 'Optics: lenses & mirrors', 'Electrostatics', 'DC circuits', 'Magnetism', 'Heat & thermodynamics', 'Radioactivity & half-life'],
   'Maths skills': ['Rearranging equations', 'Logs & exponentials', 'Units & dimensional analysis', 'Scientific notation & estimation', 'Reading graphs & tables', 'Ratios & proportionality', 'Trigonometry basics'],
 };
-const REASONS = { gap: 'Content gap', reasoning: 'Reasoning / method', misread: 'Misread question', time: 'Ran out of time', careless: 'Careless slip' };
+const REASONS = { gap: 'Knowledge/content issue', misreadQ: 'Misread Q', misreadStem: 'Misread stem', stem: 'Didn\'t understand stem', q: 'Didn\'t understand Q', logic: 'Logic/reasoning issue', maths: 'Maths/calculation error', visual: 'Visual interpretation issue', evidence: 'Did not use evidence from stem', vocab: 'Vocab issue', comp: 'Comprehension issue', rushed: 'Rushed', guess: 'Guess', clumsy: 'Clumsy mistake', skipped: 'Skipped/incomplete', block: 'Mental block' };
+const OLD_REASON = { reasoning: 'logic', misread: 'misreadQ', time: 'rushed', careless: 'clumsy' };
+const mReasons = m => (m.reasons && m.reasons.length ? m.reasons : [m.reason]).map(r => OLD_REASON[r] || r).filter(Boolean);
+const RESOURCES = ['Des', 'ACER PDF A', 'ACER PDF B', 'ACER ONLINE A', 'ACER ONLINE B', 'ACER GREEN', 'ACER PINK', 'ACER ORANGE', 'ACER PURPLE', 'ACER BLUE'];
 const DRILL_TYPES = ['Assorted drills', 'Hard skills practice', 'Maths skills', 'Graph & table reading', 'Past incorrect questions', 'Poetry / cartoons (S1)', 'Essay planning (S2)'];
 function topicState(tp) { if (tp.gap) return 'gap'; if (tp.status === 'todo') return 'todo'; return topicDue(tp) <= today() ? 'due' : 'ok'; }
 const topicArea = tp => tp.area || 'Other';
@@ -1188,35 +1261,38 @@ function contentTracker() {
   const reviewed = all.filter(tp => tp.status !== 'todo').length;
   const queue = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp)) && (!sec || tp.sec === sec)).sort((a, b) => (b.gap ? 1 : 0) - (a.gap ? 1 : 0) || (b.misses || 0) - (a.misses || 0));
   const m30 = S.core.mistakes.filter(m => m.date >= addDays(T, -29) && (!sec || m.sec === sec));
-  const byReason = Object.keys(REASONS).map(k => [k, m30.filter(m => m.reason === k).length]).filter(x => x[1]);
-  const confBtns = tp => `<div class="conf">${[1, 2, 3, 4, 5].map(n => `<button class="${tp.conf === n && tp.status !== 'todo' ? 'on' : ''}" data-act="topicConf" data-id="${tp.id}" data-n="${n}" aria-label="Confidence ${n}" title="Confidence ${n}">${n}</button>`).join('')}</div>`;
+  const byReason = Object.keys(REASONS).map(k => [k, m30.filter(m => mReasons(m).includes(k)).length]).filter(x => x[1]).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const confBtns = tp => `<div class="conf" title="Your understanding">${[1, 2, 3, 4].map(n => `<button class="${tp.conf === n && tp.status !== 'todo' ? 'on' : ''}" data-act="topicConf" data-id="${tp.id}" data-n="${n}" aria-label="Understanding: ${UNDER[n]}" title="${UNDER[n]}">${['', 'Nil', 'Sub', 'At rec', 'Over'][n]}</button>`).join('')}</div>`;
+  const meta = tp => [tp.num ? `<span>#${typeof tp.num === 'number' && tp.sec === 'S3' ? tp.num.toFixed(2) : tp.num}</span>` : '', tp.freq ? `<span class="due-chip ${FREQ[tp.freq] >= 3 ? 'soon' : ''}" title="How often it appears in ACER materials">${esc(tp.freq)}</span>` : '', tp.depth ? `<span title="Recommended depth">${DEPTH[tp.depth]}</span>` : '', tp.needed ? '<span title="Needed to answer questions (not just to read the stem)">needed for Qs</span>' : ''].join('');
   const missBadge = tp => tp.misses ? `<span class="due-chip ${tp.gap ? 'soon' : ''}" title="Wrong answers from content gaps">${tp.misses} miss${tp.misses > 1 ? 'es' : ''}</span>` : '';
   let body = '';
   if (view === 'first') {
     const areas = [...new Set(all.map(topicArea))];
     UI.openAreas = UI.openAreas || {};
     const firstOpen = areas.find(a => all.some(tp => topicArea(tp) === a && tp.status === 'todo'));
-    body = areas.map(a => { const ts = all.filter(tp => topicArea(tp) === a); const done = ts.filter(tp => tp.status !== 'todo').length; const key = (sec || 'all') + '|' + a;
+    const sortT = UI.topicSort === 'yield' ? (a, b) => topicYield(b) - topicYield(a) : (a, b) => (a.num ?? 999) - (b.num ?? 999);
+    body = `<div class="row small" style="justify-content:space-between"><span class="muted">Tick a topic once you've done your first review, then rate your understanding against the recommended depth.</span><div class="chip-row"><button class="fchip ${UI.topicSort !== 'yield' ? 'on' : ''}" data-act="topicSort" data-v="course">Course order</button><button class="fchip ${UI.topicSort === 'yield' ? 'on' : ''}" data-act="topicSort" data-v="yield">Highest yield first</button></div></div>` + areas.map(a => { const ts = all.filter(tp => topicArea(tp) === a).sort(sortT); const done = ts.filter(tp => tp.status !== 'todo').length; const key = (sec || 'all') + '|' + a;
       const open = UI.openAreas[key] ?? (a === firstOpen || ts.length <= 6);
       return `<div class="field" style="gap:2px"><button class="row" style="justify-content:space-between;width:100%" data-act="areaToggle" data-k="${esc(key)}" data-o="${open ? 1 : 0}" aria-expanded="${open}"><span class="lab">${open ? '▾' : '▸'} ${esc(a)}</span><span class="small muted">${done}/${ts.length}${ts.some(tp => tp.gap) ? ' · <span class="over">gaps</span>' : ''}</span></button><div class="bar" style="height:4px"><i style="width:${ts.length ? done / ts.length * 100 : 0}%"></i></div>
-        ${open ? '' : '</div>'}${!open ? '' : `<ul class="tasks">${ts.map(tp => `<li class="task ${tp.status !== 'todo' ? '' : ''}"><button class="chk ${tp.status !== 'todo' ? 'on' : ''}" data-act="topicTick" data-id="${tp.id}" aria-label="${tp.status !== 'todo' ? 'Mark not reviewed' : 'Mark reviewed'}"></button><button class="tmain" data-act="topicEdit" data-id="${tp.id}"><span class="ttitle">${esc(tp.name)}</span><span class="tmeta">${sec ? '' : secPill(tp.sec)}${tp.status !== 'todo' && tp.reviewedAt ? `<span>reviewed ${fmtShort(tp.reviewedAt)}</span>` : ''}${missBadge(tp)}${tp.notes ? `<span>${esc(tp.notes.slice(0, 60))}</span>` : ''}${tp.ex ? '<span class="ex">example</span>' : ''}</span></button>${tp.status !== 'todo' ? confBtns(tp) : ''}</li>`).join('')}</ul></div>`}`; }).join('') ||
+        ${open ? '' : '</div>'}${!open ? '' : `<ul class="tasks">${ts.map(tp => `<li class="task ${tp.status !== 'todo' ? '' : ''}"><button class="chk ${tp.status !== 'todo' ? 'on' : ''}" data-act="topicTick" data-id="${tp.id}" aria-label="${tp.status !== 'todo' ? 'Mark not reviewed' : 'Mark reviewed'}"></button><button class="tmain" data-act="topicEdit" data-id="${tp.id}"><span class="ttitle">${esc(tp.name)}</span><span class="tmeta">${sec ? '' : secPill(tp.sec)}${meta(tp)}${tp.status !== 'todo' && tp.conf ? `<span>${UNDER[tp.conf]}</span>` : ''}${missBadge(tp)}${tp.notes ? `<span>${esc(tp.notes.slice(0, 60))}</span>` : ''}${tp.ex ? '<span class="ex">example</span>' : ''}</span></button>${tp.status !== 'todo' ? confBtns(tp) : ''}</li>`).join('')}</ul></div>`}`; }).join('') ||
       `<p class="empty">No ${sec || ''} topics yet.</p>`;
-    if (sec === 'S3' || !sec) body += !S.core.topics.some(tp => tp.starter) ? `<div class="carry" style="background:var(--accent-soft)"><span class="small">Want a starting checklist? Load ${Object.values(S3_STARTER).flat().length} common S3 topics across biology, chemistry, organic chemistry, physics and maths. Rename, delete or add to them freely.</span><button class="btn sm" style="align-self:flex-start" data-act="loadStarter">Load S3 starter list</button></div>` : '';
+    if (!S.core.settings.gamsat.wbLoaded) body = `<div class="carry" style="background:var(--accent-soft)"><span class="small"><b>Load the syllabus from your Notion workbooks:</b> the 40-concept S3 Literacy Syllabus and 9-skill Maths Syllabus (with frequency, depth and mode of assessment), the S1 thinking skills and stem types, and the S2 essay rubric.</span><button class="btn sm pri" style="align-self:flex-start" data-act="loadWorkbook">Load my workbook syllabus</button></div>` + body;
   } else if (view === 'queue') {
     body = `<p class="small muted">Topics you've missed questions on because of content gaps come first, then topics due for spaced review. Re-review the content, then rate your confidence to clear it.</p>
       <ul class="tasks">${queue.map(tp => { const last = S.core.mistakes.filter(m => m.topicId === tp.id).sort((a, b) => a.date < b.date ? 1 : -1)[0];
-        return `<li class="task"><span class="dot" style="--h:${tp.gap ? 25 : 70};margin-top:6px"></span><button class="tmain" data-act="topicEdit" data-id="${tp.id}"><span class="ttitle">${secPill(tp.sec)} ${esc(tp.name)}</span><span class="tmeta"><span>${esc(topicArea(tp))}</span>${missBadge(tp)}${tp.gap ? `<span class="over">content gap${last ? ` · ${esc(last.src || fmtShort(last.date))}` : ''}</span>` : '<span>spaced review due</span>'}</span></button>${confBtns(tp)}</li>`; }).join('') || '<li class="empty">Nothing to re-review. Log a wrong answer when you miss a question because you didn\'t know the content.</li>'}</ul>`;
+        return `<li class="task"><span class="dot" style="--h:${tp.gap ? 25 : 70};margin-top:6px"></span><button class="tmain" data-act="topicEdit" data-id="${tp.id}"><span class="ttitle">${secPill(tp.sec)} ${esc(tp.name)}</span><span class="tmeta"><span>${esc(topicArea(tp))}</span>${meta(tp)}${missBadge(tp)}${tp.gap ? `<span class="over">content gap${last ? ` · ${esc(last.src || fmtShort(last.date))}` : ''}</span>` : '<span>spaced review due</span>'}</span></button>${confBtns(tp)}</li>`; }).join('') || '<li class="empty">Nothing to re-review. Log a wrong answer when you miss a question because you didn\'t know the content.</li>'}</ul>`;
   } else {
     const ms = S.core.mistakes.filter(m => !sec || m.sec === sec).slice().sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 60);
     body = `<div class="table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Topic</th><th>Question</th><th>Why</th><th>Note</th></tr></thead><tbody>${ms.map(m => { const tp = S.core.topics.find(x => x.id === m.topicId);
-      return `<tr data-act="mistakeEdit" data-id="${m.id}" style="cursor:pointer"><td style="white-space:nowrap">${fmtShort(m.date)}</td><td>${secPill(m.sec)} ${esc(tp ? tp.name : '—')}</td><td>${esc(m.src || '')}</td><td class="${m.reason === 'gap' ? 'over' : ''}" style="white-space:nowrap">${REASONS[m.reason] || ''}</td><td>${esc(m.note || '')}</td></tr>`; }).join('') || '<tr><td colspan="5" class="muted">No wrong answers logged yet.</td></tr>'}</tbody></table></div>`;
+      return `<tr data-act="mistakeEdit" data-id="${m.id}" style="cursor:pointer"><td style="white-space:nowrap">${fmtShort(m.date)}</td><td>${secPill(m.sec)} ${esc(tp ? tp.name : '—')}</td><td>${esc(m.src || '')}</td><td class="${mReasons(m).includes('gap') ? 'over' : ''}">${mReasons(m).map(r => REASONS[r] || r).join(', ')}</td><td>${esc(m.note || '')}</td></tr>`; }).join('') || '<tr><td colspan="5" class="muted">No wrong answers logged yet.</td></tr>'}</tbody></table></div>`;
   }
-  return `<section class="card flat" id="content"><div class="chead"><h3>Content tracker</h3><button class="btn pri sm" data-act="mistakeNew">+ Log a wrong answer</button></div>
+  return `<section class="card flat" id="content"><div class="chead"><h3>Content tracker</h3><a class="link" href="${NOTION_LINKS.syllabus}" target="_blank" rel="noopener">Syllabus in Notion ↗</a></div>
     <div class="stats"><div class="stat"><b>${reviewed}/${all.length}</b><span class="lab">${sec || 'all'} topics reviewed</span></div><div class="stat"><b>${queue.length}</b><span class="lab">to re-review</span></div><div class="stat"><b>${m30.length}</b><span class="lab">wrong answers · 30 days</span></div></div>
     ${byReason.length ? `<div class="chip-row small">${byReason.map(([k, n]) => `<span class="due-chip ${k === 'gap' ? 'soon' : ''}">${REASONS[k]} · ${n} (${Math.round(n / m30.length * 100)}%)</span>`).join('')}</div>` : ''}
     <div class="row" style="justify-content:space-between"><div class="chip-row">${['S3', 'S1', 'S2', ''].map(s => `<button class="fchip ${sec === s ? 'on' : ''}" data-act="topicSec" data-s="${s}">${s || 'All'}</button>`).join('')}</div>
     <div class="chip-row">${[['first', 'First pass'], ['queue', `Review queue`], ['log', 'Mistake log']].map(([k, l]) => `<button class="fchip ${view === k ? 'on' : ''}" data-act="topicView" data-v="${k}">${l}${k === 'queue' && queue.length ? `<span class="n">${queue.length}</span>` : ''}</button>`).join('')}</div></div>
     ${body}
+    <p class="small muted">Do the full question write-up in your Notion analysis database: <a class="link" href="${NOTION_LINKS.S1}" target="_blank" rel="noopener">S1</a> · <a class="link" href="${NOTION_LINKS.S2}" target="_blank" rel="noopener">S2</a> · <a class="link" href="${NOTION_LINKS.S3}" target="_blank" rel="noopener">S3</a>. Log it here too so the topic comes back for review.</p>
     <div class="addrow" style="flex-wrap:wrap"><select class="in" id="tp-sec" style="flex:0 0 76px"><option ${sec === 'S1' ? 'selected' : ''}>S1</option><option ${sec === 'S2' ? 'selected' : ''}>S2</option><option ${sec === 'S3' || !sec ? 'selected' : ''}>S3</option></select><input class="in" id="tp-area" list="areas" placeholder="Area (e.g. Physics)" style="flex:1 1 130px"><datalist id="areas">${[...new Set([...Object.keys(S3_STARTER), ...S.core.topics.map(topicArea)])].map(a => `<option value="${esc(a)}">`).join('')}</datalist><input class="in" id="tp-add" placeholder="Add a topic" data-enter="addTopic" style="flex:2 1 160px"><button class="btn sm" data-act="addTopic">Add</button></div></section>`;
 }
 function drillsCard() {
@@ -1233,13 +1309,13 @@ function drillsCard() {
     <p class="small muted">▲▼ compare your last 3 sessions with the 3 before.</p></section>`;
 }
 function mistakeSheet(id) {
-  const m = id ? S.core.mistakes.find(x => x.id === id) : { date: today(), sec: UI.topicSec || 'S3', topicId: '', src: '', reason: 'gap', note: '' };
+  const m = id ? S.core.mistakes.find(x => x.id === id) : { date: today(), sec: UI.topicSec || 'S3', topicId: '', src: '', reasons: ['gap'], note: '' };
   const groups = {}; for (const tp of S.core.topics) (groups[`${tp.sec} · ${topicArea(tp)}`] = groups[`${tp.sec} · ${topicArea(tp)}`] || []).push(tp);
   openSheet(sheetHead(id ? 'Wrong answer' : 'Log a wrong answer') + `
-    <div class="grid2"><div class="field"><span class="lab">Date</span><input type="date" class="in" id="mk-d" value="${m.date}"></div><div class="field"><span class="lab">Question / source</span><input class="in" id="mk-src" value="${esc(m.src || '')}" placeholder="e.g. Des chp 3 Q12" autofocus></div></div>
+    <div class="grid2"><div class="field"><span class="lab">Date</span><input type="date" class="in" id="mk-d" value="${m.date}"></div><div class="field"><span class="lab">Question / source</span><input class="in" id="mk-src" list="mk-res" value="${esc(m.src || '')}" placeholder="e.g. ACER PDF A Q12" autofocus><datalist id="mk-res">${RESOURCES.map(r => `<option value="${r} Q">`).join('')}</datalist></div></div>
     <div class="field"><span class="lab">Topic</span><select class="in" id="mk-t" data-ch="mkTopic"><option value="">Choose a topic…</option>${Object.keys(groups).sort().map(g => `<optgroup label="${esc(g)}">${groups[g].map(tp => `<option value="${tp.id}" ${m.topicId === tp.id ? 'selected' : ''}>${esc(tp.name)}</option>`).join('')}</optgroup>`).join('')}<option value="_new">+ New topic…</option></select>
       <div class="row" id="mk-new" hidden><select class="in" id="mk-ns" style="flex:0 0 76px"><option>S1</option><option>S2</option><option selected>S3</option></select><input class="in" id="mk-nn" placeholder="New topic name"></div></div>
-    <div class="field"><span class="lab">Why did you get it wrong?</span><div class="seg" id="mk-r" style="flex-wrap:wrap">${Object.entries(REASONS).map(([k, l]) => `<button class="${m.reason === k ? 'on' : ''}" data-act="segPick" data-v="${k}">${l}</button>`).join('')}</div><span class="small muted">Only content gaps put the topic in your review queue. The others are tracked so you can see your patterns.</span></div>
+    <div class="field"><span class="lab">Type of mistake (pick all that apply)</span><div class="chip-row" id="mk-r">${Object.entries(REASONS).map(([k, l]) => `<button class="fchip ${mReasons(m).includes(k) ? 'on' : ''}" data-act="chipToggle" data-v="${k}">${l}</button>`).join('')}</div><span class="small muted">Same list as your Notion analysis database. <b>Knowledge/content issue</b> puts the topic in your review queue.</span></div>
     <div class="field"><span class="lab">What to remember</span><textarea class="in" id="mk-n" rows="2" placeholder="e.g. Buffer works best when pH = pKa">${esc(m.note || '')}</textarea></div>
     <div class="row" style="justify-content:space-between">${id ? `<button class="btn danger" data-act="mistakeDel" data-id="${id}">Delete</button>` : '<span></span>'}<button class="btn pri" data-act="mistakeSave" data-id="${id || ''}">Save</button></div>`);
 }
@@ -1657,7 +1733,7 @@ function essaySheet(id) {
 function topicSheet(id) {
   const tp = S.core.topics.find(x => x.id === id); if (!tp) return;
   openSheet(sheetHead('Topic') + `<input class="in" id="tp-n" value="${esc(tp.name)}"><div class="grid2"><div class="field"><span class="lab">Section</span><select class="in" id="tp-s">${['S1', 'S2', 'S3'].map(s => `<option ${tp.sec === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div><div class="field"><span class="lab">Last reviewed</span><input type="date" class="in" id="tp-l" value="${tp.last}"></div><div class="field" style="grid-column:1/-1"><span class="lab">Area</span><input class="in" id="tp-a" value="${esc(tp.area || '')}" placeholder="e.g. Physics"></div></div>
-    ${(() => { const ms = S.core.mistakes.filter(m => m.topicId === tp.id); return ms.length ? `<div class="field"><span class="lab">Wrong answers on this topic</span><ul class="small" style="display:flex;flex-direction:column;gap:3px">${ms.map(m => `<li>${fmtShort(m.date)} · ${esc(m.src || '')} · ${REASONS[m.reason]}${m.note ? ' · ' + esc(m.note) : ''}</li>`).join('')}</ul></div>` : ''; })()}
+    ${(() => { const ms = S.core.mistakes.filter(m => m.topicId === tp.id); return ms.length ? `<div class="field"><span class="lab">Wrong answers on this topic</span><ul class="small" style="display:flex;flex-direction:column;gap:3px">${ms.map(m => `<li>${fmtShort(m.date)} · ${esc(m.src || '')} · ${mReasons(m).map(r => REASONS[r] || r).join(', ')}${m.note ? ' · ' + esc(m.note) : ''}</li>`).join('')}</ul></div>` : ''; })()}
     <div class="field"><span class="lab">Notes, mistakes, formulas</span><textarea class="in" id="tp-no" rows="3">${esc(tp.notes || '')}</textarea></div>
     <div class="row" style="justify-content:space-between"><button class="btn danger" data-act="topicDel" data-id="${id}">Delete</button><button class="btn pri" data-act="topicSave" data-id="${id}">Save</button></div>`);
 }
@@ -1854,9 +1930,15 @@ const ACT = {
     const n = BD.steps.length; BD = null; touch('tasks'); closeSheet(); toast(`${n} chunks added to your plan`);
   },
   addTopic: () => { const v = val('tp-add').trim(); if (!v) return; S.core.topics.push({ id: uid(), sec: val('tp-sec'), area: val('tp-area').trim() || 'Other', name: v, status: 'todo', conf: 0, last: today(), notes: '', misses: 0 }); commit('core'); $('#tp-add') && $('#tp-add').focus(); },
-  topicTick: el => { const tp = S.core.topics.find(x => x.id === el.dataset.id); if (tp.status === 'todo') { tp.status = 'reviewed'; tp.reviewedAt = today(); tp.last = today(); tp.conf = tp.conf || 3; } else { tp.status = 'todo'; } commit('core'); },
+  topicTick: el => { const tp = S.core.topics.find(x => x.id === el.dataset.id); if (tp.status === 'todo') { tp.status = 'reviewed'; tp.reviewedAt = today(); tp.last = today(); tp.conf = tp.conf || 3; toast('Reviewed. Now rate your understanding: Nil, Sub, At rec or Over.'); } else { tp.status = 'todo'; } commit('core'); },
   areaToggle: el => { UI.openAreas[el.dataset.k] = el.dataset.o !== '1'; render(); },
+  goTasks: el => { UI.view = 'tasks'; UI.taskFilter = el.dataset.f; saveUI(); render(); window.scrollTo(0, 0); },
+  goContent: () => { UI.view = 'gamsat'; UI.gTab = 'content'; UI.topicView = 'queue'; UI.topicSec = ''; saveUI(); render(); window.scrollTo(0, 0); },
+  scrollTo: el => { const c = document.getElementById('card-' + el.dataset.to); if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'start' }); c.animate([{ boxShadow: '0 0 0 3px var(--accent)' }, { boxShadow: '0 0 0 0 transparent' }], { duration: 1200 }); } },
+  gTab: el => { UI.gTab = el.dataset.v; saveUI(); render(); },
   topicView: el => { UI.topicView = el.dataset.v; render(); },
+  loadWorkbook: () => loadWorkbook(),
+  topicSort: el => { UI.topicSort = el.dataset.v; render(); },
   loadStarter: () => { const have = new Set(S.core.topics.map(t => t.sec + '|' + t.name.toLowerCase())); let n = 0; for (const [area, list] of Object.entries(S3_STARTER)) for (const name of list) if (!have.has('S3|' + name.toLowerCase())) { S.core.topics.push({ id: uid(), sec: 'S3', area, name, status: 'todo', conf: 0, last: today(), notes: '', misses: 0, starter: true }); n++; } UI.topicSec = 'S3'; UI.topicView = 'first'; commit('core'); toast(`${n} topics added`); },
   mistakeNew: () => mistakeSheet(),
   mistakeEdit: el => mistakeSheet(el.dataset.id),
@@ -1864,22 +1946,22 @@ const ACT = {
     let tid = val('mk-t');
     if (tid === '_new') { const nm = val('mk-nn').trim(); if (!nm) { $('#mk-nn').focus(); return; } const tp = { id: uid(), sec: val('mk-ns'), area: 'Other', name: nm, status: 'todo', conf: 0, last: today(), notes: '', misses: 0 }; S.core.topics.push(tp); tid = tp.id; }
     if (!tid) { toast('Choose the topic this question tested'); return; }
-    const tp = S.core.topics.find(x => x.id === tid); const reason = ($('#mk-r .on') || {}).dataset ? $('#mk-r .on').dataset.v : 'gap';
-    const m = { date: val('mk-d') || today(), sec: tp.sec, topicId: tid, src: val('mk-src').trim(), reason, note: val('mk-n').trim() };
+    const tp = S.core.topics.find(x => x.id === tid); const reasons = [...document.querySelectorAll('#mk-r .on')].map(b => b.dataset.v); if (!reasons.length) { toast('Pick at least one type of mistake'); return; } const reason = reasons.includes('gap') ? 'gap' : reasons[0];
+    const m = { date: val('mk-d') || today(), sec: tp.sec, topicId: tid, src: val('mk-src').trim(), reason, reasons, note: val('mk-n').trim() };
     const id = el.dataset.id; const old = id && S.core.mistakes.find(x => x.id === id);
-    if (old) { if (old.reason === 'gap' && old.topicId) { const ot = S.core.topics.find(x => x.id === old.topicId); if (ot) ot.misses = Math.max(0, (ot.misses || 0) - 1); } Object.assign(old, m); } else S.core.mistakes.push({ id: uid(), ...m });
+    if (old) { if (mReasons(old).includes('gap') && old.topicId) { const ot = S.core.topics.find(x => x.id === old.topicId); if (ot) ot.misses = Math.max(0, (ot.misses || 0) - 1); } Object.assign(old, m); } else S.core.mistakes.push({ id: uid(), ...m });
     if (reason === 'gap') { tp.misses = (tp.misses || 0) + 1; tp.gap = true; }
     if (m.note && !(tp.notes || '').includes(m.note)) tp.notes = (tp.notes ? tp.notes + ' · ' : '') + m.note;
-    touch('core'); closeSheet(); toast(reason === 'gap' ? `${tp.name} added to your review queue` : 'Logged');
+    touch('core'); closeSheet(); toast(reason === 'gap' ? `${tp.name} added to your review queue` : 'Logged. Not a content gap, so it stays out of the review queue.');
   },
-  mistakeDel: el => { closeSheet(); withUndo('Wrong answer deleted', ['core'], () => { const m = S.core.mistakes.find(x => x.id === el.dataset.id); if (m && m.reason === 'gap') { const tp = S.core.topics.find(x => x.id === m.topicId); if (tp) tp.misses = Math.max(0, (tp.misses || 0) - 1); } S.core.mistakes = S.core.mistakes.filter(x => x.id !== el.dataset.id); commit('core'); }); },
+  mistakeDel: el => { closeSheet(); withUndo('Wrong answer deleted', ['core'], () => { const m = S.core.mistakes.find(x => x.id === el.dataset.id); if (m && mReasons(m).includes('gap')) { const tp = S.core.topics.find(x => x.id === m.topicId); if (tp) tp.misses = Math.max(0, (tp.misses || 0) - 1); } S.core.mistakes = S.core.mistakes.filter(x => x.id !== el.dataset.id); commit('core'); }); },
   drillNew: () => drillSheet(), drillEdit: el => drillSheet(el.dataset.id),
   drillSave: el => { const type = val('dr-t').trim(); const n = +val('dr-n'), c = +val('dr-c'); if (!type) { $('#dr-t').focus(); return; } if (!n || c > n) { toast(c > n ? 'Correct can\'t be more than questions' : 'Enter how many questions'); return; }
     const d = { date: val('dr-d') || today(), sec: val('dr-s'), type, n, correct: c, min: +val('dr-m') || 0, note: val('dr-no').trim() }; const id = el.dataset.id;
     if (id) Object.assign(S.core.drills.find(x => x.id === id), d); else { S.core.drills.push({ id: uid(), at: Date.now(), ...d }); if (d.min && $('#dr-log') && $('#dr-log').checked) logFocus(d.date, d.min, d.sec, 'Drill: ' + type); }
     touch('core'); closeSheet(); toast(`${Math.round(c / n * 100)}% · ${d.min ? (d.min / n).toFixed(2) + ' min/Q' : 'logged'}`); },
   drillDel: el => { closeSheet(); withUndo('Drill deleted', ['core'], () => { S.core.drills = S.core.drills.filter(x => x.id !== el.dataset.id); commit('core'); }); },
-  topicConf: el => { const tp = S.core.topics.find(x => x.id === el.dataset.id); tp.conf = +el.dataset.n; tp.last = today(); tp.gap = false; if (tp.status === 'todo') { tp.status = 'reviewed'; tp.reviewedAt = today(); } commit('core'); toast(`Next review ${fmtShort(topicDue(tp))}`); },
+  topicConf: el => { const tp = S.core.topics.find(x => x.id === el.dataset.id); tp.conf = +el.dataset.n; tp.last = today(); tp.gap = false; if (tp.status === 'todo') { tp.status = 'reviewed'; tp.reviewedAt = today(); } commit('core'); toast(`${UNDER[tp.conf]} · next check ${fmtShort(topicDue(tp))}`); },
   topicSec: el => { UI.topicSec = el.dataset.s; render(); },
   topicEdit: el => topicSheet(el.dataset.id),
   topicSave: el => { const tp = S.core.topics.find(x => x.id === el.dataset.id); Object.assign(tp, { name: val('tp-n').trim() || tp.name, sec: val('tp-s'), area: val('tp-a').trim() || tp.area, last: val('tp-l') || tp.last, notes: val('tp-no') }); touch('core'); closeSheet(); },
@@ -2013,7 +2095,7 @@ function startApp(withEx) {
 }
 async function boot() {
   try { const raw = localStorage.getItem(LS); if (raw) { const j = JSON.parse(raw); if (j && j.core) S = { core: j.core, tasks: j.tasks, months: j.months || {}, archive: j.archive || {} }; } } catch (e) {}
-  try { const u = JSON.parse(localStorage.getItem(LSUI) || '{}'); Object.assign(UI, { view: u.view || 'today', taskFilter: u.taskFilter || 'today', planMode: u.planMode || 'week' }); } catch (e) {}
+  try { const u = JSON.parse(localStorage.getItem(LSUI) || '{}'); Object.assign(UI, { view: u.view || 'today', taskFilter: u.taskFilter || 'today', planMode: u.planMode || 'week', gTab: u.gTab || 'week' }); } catch (e) {}
   UI.lastSeen = today();
   if (S.core) { normalise(); maybeArchive(); booted = true; render(); initRemote(); return; }
   applyLook();
