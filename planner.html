@@ -452,6 +452,7 @@ const ICON = {
   habits: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 13l4 4L20 5"/><path d="M4 20h16" opacity=".5"/></svg>',
   reflect: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M5 17a3 3 0 013-3h11"/></svg>',
   wellness: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z"/></svg>',
+  med: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3h4v6h6v4h-6v8h-4v-8H4V9h6z"/></svg>',
   settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
@@ -507,7 +508,7 @@ function defaultSettings() {
 function blankCore() {
   return { _u: Date.now(), settings: defaultSettings(),
     cats: [{ id: 'gamsat', name: 'GAMSAT', h: 350 }, { id: 'uni', name: 'Uni', h: 285 }, { id: 'clinic', name: 'Placement', h: 195 }, { id: 'health', name: 'Health', h: 145 }, { id: 'life', name: 'Life', h: 65 }],
-    habits: [], projects: [], recBlocks: [], scores: [], essays: [], topics: [], mistakes: [], drills: [] };
+    habits: [], projects: [], recBlocks: [], scores: [], essays: [], topics: [], mistakes: [], drills: [], ideas: [], schools: [], mmi: [] };
 }
 const EMPTY = Object.freeze({});
 function day(date, create) {
@@ -800,7 +801,8 @@ function normalise() {
   const ids = new Set(c.settings.cards.map(x => x.id));
   for (const id of Object.keys(CARDS)) if (!ids.has(id)) c.settings.cards.push({ id, on: true });
   c.settings.cards = c.settings.cards.filter(x => CARDS[x.id]);
-  for (const k of ['cats', 'habits', 'projects', 'recBlocks', 'scores', 'essays', 'topics', 'mistakes', 'drills']) if (!Array.isArray(c[k])) c[k] = [];
+  for (const k of ['cats', 'habits', 'projects', 'recBlocks', 'scores', 'essays', 'topics', 'mistakes', 'drills', 'ideas', 'schools', 'mmi']) if (!Array.isArray(c[k])) c[k] = [];
+  if (!c.gpa) c.gpa = { scale: 7, years: [{ label: 'Final year', gpa: '', w: 3 }, { label: 'Penultimate year', gpa: '', w: 2 }, { label: 'Antepenultimate year', gpa: '', w: 1 }] };
   if (!S.tasks) S.tasks = { _u: 0, list: [] };
   if (!Array.isArray(S.tasks.list)) S.tasks.list = [];
   for (const t of S.tasks.list) { if (!Array.isArray(t.subs)) t.subs = []; }
@@ -837,7 +839,7 @@ function applyLook() {
 /* ============================== shell ============================== */
 const NAV = [
   ['Plan', [['today', 'Today'], ['plan', 'Week & month'], ['tasks', 'Tasks'], ['projects', 'Projects']]],
-  ['Study', [['gamsat', 'GAMSAT']]],
+  ['Study', [['gamsat', 'GAMSAT'], ['med', 'Med school']]],
   ['Grow', [['habits', 'Habits'], ['reflect', 'Reflect'], ['wellness', 'Wellness']]],
   ['You', [['settings', 'Customise']]],
 ];
@@ -891,10 +893,11 @@ function vToday() {
   const gd = S.core.settings.gamsat.date; const left = gd ? diffDays(T, gd) : null;
   const name = S.core.settings.name;
   const title = isT ? `${greet()}${name ? `, <em>${esc(name)}</em>` : ''}.` : esc(fmt(D, { weekday: 'long' })) + (D < T ? ' <em>past</em>' : '');
-  const sub = [left != null && left >= 0 ? `<span>GAMSAT in <b>${left}</b> days</span>` : '', fm ? `<span><b>${fmtMin(fm)}</b> focused today</span>` : ''].filter(Boolean).join('');
+  const s2l = S.core.settings.gamsat.s2Date ? diffDays(T, S.core.settings.gamsat.s2Date) : null;
+  const sub = [s2l != null && s2l >= 0 ? `<span>S2 in <b>${s2l}</b> days</span>` : '', left != null && left >= 0 ? `<span>S1 + S3 in <b>${left}</b> days</span>` : '', fm ? `<span><b>${fmtMin(fm)}</b> focused today</span>` : ''].filter(Boolean).join('');
   const ex = S.core.settings.hasExamples ? `<div class="card flat" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--accent-soft);border-color:transparent"><span class="small">You're looking at <b>example content</b> so you can see how everything works. Items marked <span class="ex">example</span> go away in one tap.</span><button class="btn sm" data-act="clearEx">Clear examples</button></div>` : '';
   const nextMon = addDays(mondayOf(T), 7), gs = S.core.settings.gamsat;
-  const planBanner = isT && (wd(T) === 0 || wd(T) === 6) && !(gs.imported && gs.imported[nextMon]) ? `<div class="card flat" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap"><span><b>It's the weekend.</b> <span class="muted">Plan next week (from ${fmtShort(nextMon)})${gs.planDoc ? ' from your Game Plan' : ''}.</span></span><button class="btn pri sm" data-act="impOpen">Plan my week</button></div>` : '';
+  const planBanner = isT && (wd(T) === 0 || wd(T) === 6) && !(gs.imported && gs.imported[nextMon]) ? `<div class="card flat" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap"><span><b>It's the weekend.</b> <span class="muted">Plan next week (from ${fmtShort(nextMon)})${gs.planDoc ? ' from your Game Plan' : ''}.</span></span><button class="btn pri sm" data-act="scaffold">Start weekly Scaffold</button></div>` : '';
   const cards = S.core.settings.cards.filter(c => c.on).map(c => CARD[c.id](D)).join('');
   const odN = isT ? overdue().length : 0, wk = mondayOf(D), gl = goalFor(wk), wm = focusIn(wk, addDays(wk, 6), f => !!f.sec);
   const rq = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp))).length;
@@ -905,6 +908,7 @@ function vToday() {
     ${nextBlock ? `<button class="gl" data-act="scrollTo" data-to="schedule"><b style="font-size:20px;line-height:1.3">${nextBlock.s}</b><span>${toMin(nextBlock.s) <= new Date().getHours() * 60 + new Date().getMinutes() ? 'now' : 'next'}: ${esc(nextBlock.t)}</span></button>` : ''}
     ${gl ? `<button class="gl" data-act="go" data-v="gamsat"><b>${(wm / 60).toFixed(1)}<small style="font-size:15px">/${gl}h</small></b><span>GAMSAT this week</span></button>` : ''}
     ${rq ? `<button class="gl" data-act="goContent"><b>${rq}</b><span>topic${rq > 1 ? 's' : ''} to re-review</span></button>` : ''}
+    ${(() => { const k = upcomingKeys(21)[0]; return k ? `<button class="gl ${diffDays(T, k.date) <= 7 ? 'alert' : ''}" data-act="${k.kind === 'app' ? 'go' : 'goWeek'}" data-v="med"><b>${diffDays(T, k.date)}d</b><span>${esc(k.title)}</span></button>` : ''; })()}
     ${hs.length ? `<button class="gl ${hDone === hs.length ? 'good' : ''}" data-act="scrollTo" data-to="habits"><b>${hDone}/${hs.length}</b><span>habits</span></button>` : ''}
   </div>`;
   return header(esc(fmtLong(D)) + (isT ? '' : ` · <button class="link" data-act="day" data-d="0">back to today</button>`), title, sub,
@@ -961,7 +965,7 @@ const CARD = {
     const due = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp))).length;
     const bySec = s => focusIn(D, D, f => f.sec === s);
     return `<section class="card"><div class="chead"><h3>GAMSAT</h3><button class="link" data-act="go" data-v="gamsat">Study hub</button></div>
-      <div class="row" style="justify-content:space-between;align-items:flex-end">${left != null ? `<div class="stat"><span class="big">${Math.max(0, left)}</span><span class="lab">days to go</span></div>` : `<button class="btn sm soft" data-act="go" data-v="gamsat">Set your test date</button>`}
+      <div class="row" style="justify-content:space-between;align-items:flex-end">${g.s2Date || left != null ? `<div class="row" style="gap:18px">${g.s2Date ? `<div class="stat"><span class="big" style="font-size:40px">${Math.max(0, diffDays(T, g.s2Date))}</span><span class="lab">days to S2</span></div>` : ''}${left != null ? `<div class="stat"><span class="big" style="font-size:40px">${Math.max(0, left)}</span><span class="lab">to S1 + S3</span></div>` : ''}</div>` : `<button class="btn sm soft" data-act="go" data-v="gamsat">Set your test date</button>`}
       <div class="stat" style="text-align:right"><b>${gt.filter(t => t.done).length}/${gt.length}</b><span class="lab">study tasks today</span></div></div>
       ${(() => { const wk = mondayOf(D), gl = goalFor(wk), m = focusIn(wk, addDays(wk, 6), f => !!f.sec); return gl ? `<div class="field" style="gap:4px"><div class="row small" style="justify-content:space-between"><span class="muted">This week</span><span>${fmtMin(m)} / ${gl}h</span></div><div class="bar"><i style="width:${Math.min(100, m / (gl * 60) * 100)}%"></i></div></div>` : ''; })()}
       ${od ? `<p class="small over">${od} overdue study task${od > 1 ? 's' : ''}</p>` : ''}
@@ -1199,18 +1203,17 @@ function vGamsat() {
   const od = sortTasks(gts.filter(t => !t.done && t.date && t.date < T)), td = sortTasks(gts.filter(t => t.date === T)), up = sortTasks(gts.filter(t => !t.done && t.date && t.date > T && t.date <= addDays(T, 7)));
   const sc = S.core.scores.slice().sort((a, b) => a.date < b.date ? -1 : 1);
   const overall = s => (s.s1 != null && s.s2 != null && s.s3 != null && s.s1 !== '' && s.s2 !== '' && s.s3 !== '') ? Math.round((+s.s1 + +s.s2 + 2 * +s.s3) / 4 * 10) / 10 : null;
-  return header('Study hub', 'GAMSAT', left != null ? `<span>Test day <b>${fmtLong(g.date)}</b></span><span><b>${fmtMin(allMin())}</b> logged in total</span>` : '<span>Add your sitting date to start the countdown.</span>',
-    `<button class="btn soft" data-act="impOpen">Plan my week</button><button class="btn soft" data-act="mistakeNew">Log a wrong answer</button><button class="btn pri" data-act="focus">${ICON.timer} Study session</button>`) +
+  return header('Study hub', 'GAMSAT', [g.s2Date ? `<span>S2 in <b>${diffDays(T, g.s2Date)}</b> days</span>` : '', g.date ? `<span>S1 + S3 in <b>${diffDays(T, g.date)}</b> days</span>` : '', `<span><b>${fmtMin(allMin())}</b> logged in total</span>`].join('') + (g.s2Date || g.date ? '' : '<span>Add your test dates to start the countdowns.</span>'),
+    `<button class="btn soft" data-act="scaffold">Weekly Scaffold</button><button class="btn soft" data-act="impOpen">Plan my week</button><button class="btn soft" data-act="mistakeNew">Log a wrong answer</button><button class="btn pri" data-act="focus">${ICON.timer} Study session</button>`) +
     gTabs() +
     `<div class="sec-grid" ${gH('week')}>
-      <section class="card flat"><div class="chead"><h3>Countdown</h3></div>
-        <div class="row" style="justify-content:space-between;align-items:flex-end"><div class="stat"><span class="big">${left != null ? Math.max(0, left) : '—'}</span><span class="lab">days${left != null ? ` · ${Math.max(0, Math.floor(left / 7))} weeks` : ''}</span></div></div>
-        <div class="grid2"><div class="field"><span class="lab">Sitting date</span><input type="date" class="in" value="${g.date}" data-ch="gDate"></div><div class="field"><span class="lab">Default weekly goal (h)</span><input type="number" min="0" max="80" class="in" value="${g.weekTarget}" data-ch="gTarget"></div></div></section>
+      ${testDatesCard()}
       <section class="card flat"><div class="chead"><h3>This week</h3><span class="lab">${fmtMin(weekMin)} / ${goal}h</span></div>
         ${secGoalSum(wk) > 0 ? `<p class="small muted">Goal = your section goals below (${goal}h).</p>` : `<label class="row small"><span class="muted">This week's goal</span><input type="number" min="0" max="80" step="0.5" class="in" style="width:80px;padding:5px 8px" value="${goal}" data-ch="gWeekGoal" data-ws="${wk}"><span class="muted">hours${g.weekGoals && g.weekGoals[wk] != null ? '' : ' (default)'}</span></label>`}
         <div class="bar"><i style="width:${target ? Math.min(100, weekMin / target * 100) : 0}%"></i></div>
         ${['S1', 'S2', 'S3'].map(s => { const m = secMin(s); const sg = +secGoalsFor(wk)[s] || 0; return `<div class="field" style="gap:4px"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><span class="small" style="min-width:0"><span class="secpill ${s}">${s}</span> ${SECS[s]}</span><span class="small muted" style="font-variant-numeric:tabular-nums;white-space:nowrap">${fmtMin(m)} / <input type="number" min="0" max="60" step="0.5" class="in" style="width:62px;padding:3px 6px;display:inline-block" value="${sg || ''}" placeholder="–" data-ch="gSecGoal" data-ws="${wk}" data-s="${s}" aria-label="${s} goal hours"> h</span></div><div class="bar"><i style="width:${sg ? Math.min(100, m / (sg * 60) * 100) : weekMin ? m / weekMin * 100 : 0}%;background:var(--${s.toLowerCase()})"></i></div></div>`; }).join('')}
         <p class="small muted">Type each section's hours from your calculator. They add up to the week's goal.</p>
+        <div class="field"><span class="lab">Default weekly goal when no section goals are set (h)</span><input type="number" min="0" max="80" class="in" style="width:100px" value="${g.weekTarget}" data-ch="gTarget"></div>
         <button class="link" data-act="logStudy" style="align-self:flex-start">+ Log time studied without the timer</button></section>
       <section class="card flat"><div class="chead"><h3>Study to-dos</h3><span class="lab">${td.filter(t => t.done).length}/${td.length} today</span></div>
         ${od.length ? `<div class="carry"><div class="chead"><span class="over">${od.length} overdue</span><button class="link" data-act="moveAllG">Move to today</button></div><ul class="tasks">${od.map(t => taskRow(t)).join('')}</ul></div>` : ''}
@@ -1220,6 +1223,8 @@ function vGamsat() {
     </div>
     ${UI.gTab === 'content' ? contentTracker() : ''}
     <div class="sec-grid" ${gH('practice')}>
+      ${paceCard()}
+      <section class="card flat"><div class="chead"><h3>Mock days</h3><button class="link" data-act="mockNew">+ Plan a mock</button></div><p class="small muted">Blocks the real section timings in your calendar and adds the review work for the next two days.</p>${(() => { const ms = []; for (const [mk_, mo] of Object.entries(S.months)) for (const [d, x] of Object.entries(mo.days)) for (const bl of (x.blocks || [])) if (/^Mock S/.test(bl.t)) ms.push([d, bl]); ms.sort((a, b) => a[0] < b[0] ? -1 : 1); return ms.length ? `<ul class="tasks">${ms.slice(-6).map(([d, bl]) => `<li class="task"><div class="tmain"><span class="ttitle">${esc(bl.t)}</span><span class="tmeta"><span>${fmt(d, { weekday: 'short', day: 'numeric', month: 'short' })} · ${bl.s}</span></span></div></li>`).join('')}</ul>` : '<p class="empty">No mocks planned yet.</p>'; })()}</section>
       ${drillsCard()}
       <section class="card flat"><div class="chead"><h3>Practice scores</h3><button class="link" data-act="scoreNew">+ Log a test</button></div>
         ${scoreChart(sc)}
@@ -1228,6 +1233,7 @@ function vGamsat() {
         ${sc.slice().reverse().map(s => `<tr data-act="scoreEdit" data-id="${s.id}" style="cursor:pointer"><td>${fmtShort(s.date)}</td><td>${esc(s.src || '')}${s.ex ? ' <span class="ex">example</span>' : ''}</td><td>${s.s1 ?? '–'}</td><td>${s.s2 ?? '–'}</td><td>${s.s3 ?? '–'}</td><td><b>${overall(s) ?? '–'}</b></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No tests logged yet.</td></tr>'}</tbody></table></div>
         <p class="small muted">Overall uses ACER's weighting: (S1 + S2 + 2 × S3) ÷ 4. Practice-paper percentages are not scaled scores, so use this to track your trend, not to predict your result.</p></section>
     </div>
+    <div ${gH('practice')}>${ideasCard()}</div>
     <section class="card flat" ${gH('practice')}><div class="chead"><h3>Section II essay log</h3><button class="link" data-act="essayNew">+ Log an essay</button></div>
       <div class="table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Task</th><th>Theme</th><th>Time</th><th>Words</th><th>Self-rating</th><th>Fix next time</th></tr></thead><tbody>
       ${S.core.essays.slice().sort((a, b) => a.date < b.date ? 1 : -1).map(e => `<tr data-act="essayEdit" data-id="${e.id}" style="cursor:pointer"><td>${fmtShort(e.date)}</td><td>${e.task}</td><td>${esc(e.theme)}${e.ex ? ' <span class="ex">example</span>' : ''}</td><td>${e.min ? e.min + 'm' : '–'}</td><td>${e.words || '–'}</td><td>${e.rating ? '●'.repeat(e.rating) + '○'.repeat(5 - e.rating) : '–'}</td><td style="min-width:220px">${esc(e.fix || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Log each timed essay with one concrete fix for next time. Patterns show up fast.</td></tr>'}</tbody></table></div></section>`;
@@ -1472,6 +1478,164 @@ function drillSheet(id) {
     <div class="row" style="justify-content:space-between">${id ? `<button class="btn danger" data-act="drillDel" data-id="${id}">Delete</button>` : '<span></span>'}<button class="btn pri" data-act="drillSave" data-id="${id || ''}">Save</button></div>`);
 }
 
+/* ============================== test dates, key dates, pace, scaffold, mock day, ideas, med school ============================== */
+const KEYS = [['regOpen', 'Registration opens', 'Nov 2026'], ['regClose', 'Standard registration closes', 'late Jan 2027'], ['regLate', 'Late registration closes (late fee)', '~10 Feb 2027'], ['results', 'Results released', 'late May 2027']];
+const SECLIM = { S1: { limit: 100, q: 62 }, S3: { limit: 150, q: 75 } };
+const targetPace = s => (SECLIM[s].limit - 20) / SECLIM[s].q; // course formula: (limit - 10 - 10) / questions
+function upcomingKeys(within = 60) {
+  const g = S.core.settings.gamsat, T = today(), k = g.keys || {}, out = [];
+  if (g.s2Date) out.push({ date: g.s2Date, title: 'GAMSAT Section II (remote)', kind: 'test' });
+  if (g.date) out.push({ date: g.date, title: 'GAMSAT Sections I + III (test centre)', kind: 'test' });
+  for (const [id, t] of KEYS) if (k[id] && !(g.keyDone || {})[id]) out.push({ date: k[id], title: t, kind: 'key' });
+  for (const c of (g.customKeys || [])) out.push({ date: c.date, title: c.title, kind: 'key' });
+  for (const a of S.core.schools) if (a.deadline && !['applied', 'offer', 'declined'].includes(a.status)) out.push({ date: a.deadline, title: `${a.name}: application deadline`, kind: 'app' });
+  return out.filter(x => x.date >= T && diffDays(T, x.date) <= within).sort((a, b) => a.date < b.date ? -1 : 1);
+}
+function testDatesCard() {
+  const g = S.core.settings.gamsat, T = today(), k = g.keys || {};
+  const cd = (d, l) => `<div class="stat"><span class="big" style="font-size:46px">${d ? Math.max(0, diffDays(T, d)) : '—'}</span><span class="lab">${l}${d ? ` · ${fmtShort(d)}` : ''}</span></div>`;
+  return `<section class="card flat"><div class="chead"><h3>Test dates</h3><span class="lab">March 2027</span></div>
+    <div class="grid2">${cd(g.s2Date, 'days to S2 (remote)')}${cd(g.date, 'days to S1 + S3')}</div>
+    <div class="grid2"><div class="field"><span class="lab">S2 · Written Communication</span><input type="date" class="in" value="${g.s2Date || ''}" data-ch="gS2Date"></div><div class="field"><span class="lab">S1 + S3 · test centre</span><input type="date" class="in" value="${g.date || ''}" data-ch="gDate"></div></div>
+    <div class="field" style="gap:6px"><span class="lab">Key dates</span>${KEYS.map(([id, t, hint]) => `<div class="row small" style="flex-wrap:nowrap"><button class="chk ${(g.keyDone || {})[id] ? 'on' : ''}" data-act="keyDone" data-k="${id}" aria-label="Done"></button><span style="flex:1;min-width:0">${t}</span><input type="date" class="in" style="width:150px;padding:5px 8px" value="${k[id] || ''}" data-ch="gKey" data-k="${id}" title="Expected: ${hint}"></div>`).join('')}
+      ${(g.customKeys || []).map(c => `<div class="row small" style="flex-wrap:nowrap"><span style="width:20px"></span><span style="flex:1">${esc(c.title)}</span><span class="muted">${fmtShort(c.date)}</span><button class="icon-btn" style="width:26px;height:26px" data-act="keyDel" data-id="${c.id}" aria-label="Remove">×</button></div>`).join('')}
+      <div class="addrow"><input class="in" id="ck-t" placeholder="Other date (e.g. ACER account set up)" style="flex:2"><input type="date" class="in" id="ck-d" style="flex:1"><button class="btn sm" data-act="keyAdd">Add</button></div></div>
+    <p class="small muted">Expected timing from search results: registration opens Nov 2026, closes late Jan 2027, late close ~10 Feb, S2 late Feb, S1+S3 late Mar, results late May. <b>Confirm every date at gamsat.acer.org</b> and type the exact ones in.</p>
+    <div class="row"><button class="btn sm soft" data-act="prepTasks">Add test-prep tasks to my plan</button><button class="link" data-act="scaffold">Weekly Scaffold</button></div></section>`;
+}
+function prepTasks() {
+  const g = S.core.settings.gamsat, k = g.keys || {}, T = today(); const G = gamsatCat() ? gamsatCat().id : '';
+  const want = [];
+  if (k.regOpen || k.regClose) want.push(['Register for GAMSAT March 2027 (ACER account)', k.regOpen ? addDays(k.regOpen, 3) : addDays(k.regClose, -14), 3]);
+  if (g.s2Date) want.push(['S2 remote: do the system check + set up a quiet room', addDays(g.s2Date, -10), 2], ['S2 taper starts: no new full mocks from here', addDays(g.s2Date, -7), 2], ['Read ACER rules for the remote S2 session (ID, room, breaks)', addDays(g.s2Date, -14), 1]);
+  if (g.date) want.push(['Check ID + what you can bring to the S1/S3 test centre', addDays(g.date, -14), 2], ['Plan travel to the test centre (route, timing, parking)', addDays(g.date, -21), 1], ['S1/S3 taper starts: light review only', addDays(g.date, -7), 2]);
+  if (k.results) want.push(['Results out: check your ACER account', k.results, 1]);
+  if (!want.length) { toast('Add your test dates or key dates first'); return; }
+  let n = 0; for (const [title, date, pri] of want) { if (S.tasks.list.some(t => t.title === title)) continue; S.tasks.list.push(newTask({ title, date: date < T ? T : date, cat: G, pri, prep: true })); n++; }
+  commit('tasks'); toast(n ? `${n} prep tasks added` : 'Prep tasks already added');
+}
+/* ---- pace ladder ---- */
+function paceInfo(sec) {
+  const p = S.core.settings.gamsat.pace || {}, T = today();
+  const weeks = p.start && p.end ? Math.max(1, Math.ceil(diffDays(p.start, p.end) / 7)) : null;
+  const wi = weeks ? clamp(Math.floor(diffDays(p.start, T) / 7) + 1, 0, weeks) : null;
+  if (sec === 'S2') {
+    const from = +(p.S2start || 0), target = 30;
+    const now = from && weeks ? from - (from - target) / weeks * wi : null;
+    const es = S.core.essays.filter(e => e.min).sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 3);
+    const actual = es.length ? es.reduce((a, e) => a + e.min, 0) / es.length : null;
+    return { target, now, actual, unit: 'min per essay', from };
+  }
+  const target = targetPace(sec), diag = +(p[sec] || 0);
+  const now = diag && weeks ? diag - (diag - target) / weeks * wi : null;
+  const ds = S.core.drills.filter(d => d.sec === sec && d.min && d.n).sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 3);
+  const n = ds.reduce((a, d) => a + d.n, 0), m = ds.reduce((a, d) => a + d.min, 0);
+  return { target, now, actual: n ? m / n : null, unit: 'min/Q', from: diag, weeks, wi };
+}
+function paceCard() {
+  const p = S.core.settings.gamsat.pace || {};
+  const row = s => { const i = paceInfo(s); const f = v => v == null ? '–' : s === 'S2' ? Math.round(v) + ' min' : v.toFixed(2); const ok = i.actual != null && i.now != null ? i.actual <= i.now + 0.005 : null;
+    return `<tr><td>${secPill(s)}</td><td><input type="number" step="${s === 'S2' ? 1 : 0.01}" min="0" class="in" style="width:78px;padding:4px 6px" value="${s === 'S2' ? p.S2start || '' : p[s] || ''}" data-ch="paceDiag" data-s="${s}" placeholder="${s === 'S2' ? 'e.g. 40' : 'e.g. 2.1'}" aria-label="${s} starting pace"></td><td>${f(i.target)}</td><td><b>${f(i.now)}</b></td><td class="${ok === false ? 'over' : ''}" style="${ok ? 'color:var(--good)' : ''}">${f(i.actual)}${ok == null ? '' : ok ? ' ✓' : ' behind'}</td></tr>`; };
+  const i1 = paceInfo('S1');
+  return `<section class="card flat"><div class="chead"><h3>Pace targets</h3><span class="lab">${i1.weeks ? `week ${i1.wi} of ${i1.weeks}` : 'set your dates'}</span></div>
+    <p class="small muted">From your course's “Finding your pace”: target = (time limit − 20 min) ÷ questions. You step from your diagnostic pace to the target, evenly across Phases 2–3. “Actual” is the average of your last 3 drills (S2: last 3 essays).</p>
+    <div class="grid2"><div class="field"><span class="lab">Pace work starts (Phase 2)</span><input type="date" class="in" value="${p.start || ''}" data-ch="paceDate" data-k="start"></div><div class="field"><span class="lab">Ends (end of Phase 3)</span><input type="date" class="in" value="${p.end || ''}" data-ch="paceDate" data-k="end"></div></div>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Diagnostic</th><th>Final target</th><th>This week</th><th>Actual</th></tr></thead><tbody>${row('S1')}${row('S3')}${row('S2')}</tbody></table></div>
+    <p class="small muted">S1 target ${targetPace('S1').toFixed(2)} min/Q (62 Q in 100 min) · S3 ${targetPace('S3').toFixed(2)} min/Q (75 Q in 150 min) · S2 30 min per essay. Add any extra-time allowance to these yourself.</p></section>`;
+}
+/* ---- weekly scaffold ---- */
+const SCAF = [['reflect', 'Reflect on last week', 'What went well, what didn\'t, and why.'], ['goals', 'Check goals + set section hours', 'Run your calculator, then enter S1/S2/S3 hours below.'], ['import', 'Pull in the week from your Game Plan', 'Tasks, commitments and study blocks.'], ['schedule', 'Put study blocks in the calendar', 'Drag anything left in “To schedule” onto a time.'], ['queue', 'Clear the review queue', 'Re-review content gaps and rate them.'], ['dates', 'Check dates coming up', 'Registration, tests, deadlines.']];
+function scaffoldSheet() {
+  const T = today(); const ws = wd(T) === 0 || wd(T) === 6 ? addDays(mondayOf(T), 7) : mondayOf(T); const last = addDays(ws, -7);
+  const g = S.core.settings.gamsat; const st = (g.scaffold || {})[ws] || {};
+  const lg = goalFor(last), lm = focusIn(last, addDays(last, 6), f => !!f.sec);
+  const lsec = s => fmtMin(focusIn(last, addDays(last, 6), f => f.sec === s));
+  const done = S.tasks.list.filter(t => t.done && t.doneAt && ymd(new Date(t.doneAt)) >= last && ymd(new Date(t.doneAt)) <= addDays(last, 6)).length;
+  const mk = S.core.mistakes.filter(m => m.date >= last && m.date <= addDays(last, 6)).length;
+  const q = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp))).length;
+  const sg = secGoalsFor(ws); const up = upcomingKeys(21);
+  const btn = { reflect: `<button class="btn sm" data-act="scafReflect" data-date="${last}">Open weekly review</button>`, goals: `<div class="row small">${['S1', 'S2', 'S3'].map(s => `${secPill(s)}<input type="number" min="0" max="60" step="0.5" class="in" style="width:62px;padding:4px 6px" value="${sg[s] ?? ''}" placeholder="–" data-ch="gSecGoal" data-ws="${ws}" data-s="${s}" aria-label="${s} hours">`).join('')}<span class="muted">h</span></div>`, import: `<button class="btn sm" data-act="impOpen">Plan my week</button>`, schedule: `<button class="btn sm" data-act="scafCal" data-date="${ws}">Open week calendar</button>`, queue: `<button class="btn sm" data-act="goContent">${q} to re-review</button>`, dates: up.length ? `<ul class="small">${up.map(x => `<li><b>${fmtShort(x.date)}</b> · ${esc(x.title)} (${diffDays(T, x.date)}d)</li>`).join('')}</ul>` : '<span class="small muted">Nothing in the next 3 weeks.</span>' };
+  const n = SCAF.filter(([k]) => st[k]).length;
+  openSheet(sheetHead('Weekly Scaffold', `<span class="lab">${n}/${SCAF.length}</span>`) + `
+    <p class="small muted">For the week of <b>${fmtLong(ws)}</b>. Your course treats this as non-negotiable before each week starts.</p>
+    <div class="card flat" style="background:var(--sunk);gap:6px"><span class="lab">Last week</span><div class="stats"><div class="stat"><b>${(lm / 60).toFixed(1)}/${lg}h</b><span class="lab">study</span></div><div class="stat"><b>${done}</b><span class="lab">tasks done</span></div><div class="stat"><b>${mk}</b><span class="lab">wrong answers logged</span></div></div><span class="small muted">S1 ${lsec('S1')} · S2 ${lsec('S2')} · S3 ${lsec('S3')}</span></div>
+    <ul class="tasks">${SCAF.map(([k, t, d]) => `<li class="task ${st[k] ? 'done' : ''}" style="align-items:flex-start"><button class="chk" data-act="scafTick" data-k="${k}" data-ws="${ws}" aria-label="Done"></button><div class="tmain" style="gap:6px"><span class="ttitle">${t}</span><span class="small muted">${d}</span>${btn[k]}</div></li>`).join('')}</ul>
+    <div class="row" style="justify-content:flex-end"><button class="btn pri" data-act="close">Done for now</button></div>`, { wide: true });
+}
+/* ---- mock day ---- */
+function mockSheet() {
+  const T = today();
+  openSheet(sheetHead('Plan a mock day') + `
+    <p class="small muted">Blocks the real timings in your calendar, then adds the review work for the next two days so the mock isn't wasted.</p>
+    <div class="field"><span class="lab">Which sections</span><div class="seg" id="mk-type">${[['s13', 'S1 + S3 (test centre)'], ['s2', 'S2 (two essays)'], ['s1', 'S1 only'], ['s3', 'S3 only']].map(([k, l], i) => `<button class="${i === 0 ? 'on' : ''}" data-act="segPick" data-v="${k}">${l}</button>`).join('')}</div></div>
+    <div class="grid2"><div class="field"><span class="lab">Date</span><input type="date" class="in" id="mo-d" value="${addDays(T, 7 - ((wd(T) + 1) % 7))}"></div><div class="field"><span class="lab">Start time</span><input type="time" class="in" id="mo-s" value="09:00"></div>
+    <div class="field"><span class="lab">Paper / source</span><input class="in" id="mo-src" list="mk-res2" placeholder="e.g. ACER ONLINE A"><datalist id="mk-res2">${RESOURCES.map(r => `<option value="${r}">`).join('')}</datalist></div><div class="field"><span class="lab">Break between S1 and S3 (min)</span><input type="number" class="in" id="mo-b" value="30" min="0" max="90"></div></div>
+    <label class="row small"><input type="checkbox" id="mo-rev" checked> Add review tasks for the next two days</label>
+    <div class="row" style="justify-content:flex-end"><button class="btn pri" data-act="mockCreate">Add mock to my plan</button></div>`);
+}
+function mockCreate() {
+  const type = ($('#mk-type .on') || {}).dataset ? $('#mk-type .on').dataset.v : 's13'; const d = val('mo-d') || today(); let m = toMin(val('mo-s') || '09:00'); const src = val('mo-src').trim(); const br = clamp(+val('mo-b') || 0, 0, 90);
+  const G = gamsatCat() ? gamsatCat().id : ''; const dd = day(d, true); dd.blocks = dd.blocks || []; const tag = src ? ` · ${src}` : '';
+  const blk = (t, len) => { dd.blocks.push({ id: uid(), s: toTime(m), e: toTime(Math.min(m + len, 23 * 60 + 59)), t, cat: G }); m += len; };
+  if (type === 's13' || type === 's1') blk(`Mock S1 (62 Q, 100 min)${tag}`, 100);
+  if (type === 's13' && br) blk('Break', br);
+  if (type === 's13' || type === 's3') blk(`Mock S3 (75 Q, 150 min)${tag}`, 150);
+  if (type === 's2') blk(`Mock S2 (2 essays, 65 min)${tag}`, 65);
+  touch(dayKey(d));
+  if ($('#mo-rev').checked) {
+    const add = (title, off, est, sec) => S.tasks.list.push(newTask({ title, date: addDays(d, off), cat: G, sec: sec || '', est }));
+    if (type !== 's2') { add(`Mark mock${tag} + log scores`, 0, 20); add('Log wrong answers + content gaps (planner + Notion)', 1, 30); }
+    if (type === 's13' || type === 's1') add(`S1 mock review: every wrong or guessed question${tag}`, 1, 90, 'S1');
+    if (type === 's13' || type === 's3') add(`S3 mock review: every wrong or guessed question${tag}`, 2, 120, 'S3');
+    if (type === 's2') { add(`Self-mark both essays against the rubric${tag}`, 1, 45, 'S2'); add('Log essays + add useful ideas to your ideas bank', 1, 15, 'S2'); }
+    touch('tasks');
+  }
+  closeSheet(); UI.view = 'plan'; UI.planMode = 'day'; UI.planDate = d; render(); toast('Mock day added');
+}
+/* ---- S2 ideas bank ---- */
+function ideasCard() {
+  const f = UI.ideaTheme || ''; const ideas = S.core.ideas;
+  const themes = [...new Set([...ideas.map(i => i.theme), ...S.core.essays.map(e => e.theme).filter(Boolean)])].sort();
+  const essaysOn = th => S.core.essays.filter(e => (e.theme || '').toLowerCase() === th.toLowerCase()).length;
+  const shown = ideas.filter(i => !f || i.theme === f).sort((a, b) => a.theme < b.theme ? -1 : 1);
+  return `<section class="card flat"><div class="chead"><h3>S2 ideas bank</h3><span class="lab">${ideas.length} ideas</span></div>
+    <p class="small muted">Keep angles and examples you've actually used so they're ready to adapt on the day. One theme can serve many quote sets.</p>
+    ${themes.length ? `<div class="chip-row"><button class="fchip ${!f ? 'on' : ''}" data-act="ideaF" data-v="">All</button>${themes.map(t => `<button class="fchip ${f === t ? 'on' : ''}" data-act="ideaF" data-v="${esc(t)}">${esc(t)}<span class="n">${ideas.filter(i => i.theme === t).length}·${essaysOn(t)}✎</span></button>`).join('')}</div>` : ''}
+    <ul class="tasks">${shown.map(i => `<li class="task"><div class="tmain"><span class="ttitle"><b>${esc(i.theme)}</b> · ${esc(i.idea)}</span>${i.example ? `<span class="small muted">e.g. ${esc(i.example)}</span>` : ''}</div><button class="star" data-act="ideaDel" data-id="${i.id}" aria-label="Delete">×</button></li>`).join('') || '<li class="empty">No ideas yet. Add one after each essay.</li>'}</ul>
+    <div class="field" style="gap:6px"><div class="addrow"><input class="in" id="id-th" list="id-ths" placeholder="Theme (e.g. Justice)" style="flex:1" value="${esc(f)}"><datalist id="id-ths">${themes.map(t => `<option value="${esc(t)}">`).join('')}</datalist></div>
+      <input class="in" id="id-idea" placeholder="Angle / argument (e.g. Justice delayed erodes institutional trust)"><div class="addrow"><input class="in" id="id-ex" placeholder="Example / evidence (optional)" data-enter="ideaAdd"><button class="btn sm" data-act="ideaAdd">Add</button></div></div>
+    <p class="small muted">✎ = essays you've logged on that theme.</p></section>`;
+}
+/* ---- med school ---- */
+const APP_STATUS = [['research', 'Researching'], ['applying', 'Preparing'], ['applied', 'Applied'], ['interview', 'Interview'], ['offer', 'Offer'], ['declined', 'Unsuccessful / withdrawn']];
+const MMI_TYPES = ['Motivation & insight into medicine', 'Ethical dilemma', 'Teamwork & collaboration', 'Communication / role-play', 'Empathy & patient-centredness', 'Health & society', 'Personal qualities & reflection', 'Critical thinking / problem solving'];
+function vMed() {
+  const gp = S.core.gpa; const rows = gp.years;
+  const wsum = rows.reduce((a, r) => a + (+r.w || 0) * (r.gpa === '' ? 0 : 1), 0); const w = wsum ? rows.reduce((a, r) => a + (r.gpa === '' ? 0 : +r.gpa * +r.w), 0) / wsum : null;
+  const up = upcomingKeys(120);
+  return header('Beyond the GAMSAT', 'Med school', '<span>GPA, applications and interview practice in one place.</span>', '') + `<div class="sec-grid">
+    <section class="card flat"><div class="chead"><h3>Weighted GPA</h3><span class="big" style="font-size:40px">${w == null ? '–' : w.toFixed(2)}</span></div>
+      <p class="small muted">Many graduate-entry schools use a weighted GPA of your most recent years of study (GEMSAS weights the last three years 3 : 2 : 1, most recent heaviest). Rules differ between schools and change, so confirm with GEMSAS and each school.</p>
+      <div class="table-wrap"><table class="tbl"><thead><tr><th>Year</th><th>GPA (/${gp.scale})</th><th>Weight</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr><td><input class="in" style="padding:4px 8px" value="${esc(r.label)}" data-ch="gpaF" data-i="${i}" data-f="label" aria-label="Year label"></td><td><input type="number" step="0.01" min="0" max="${gp.scale}" class="in" style="width:80px;padding:4px 8px" value="${r.gpa}" data-ch="gpaF" data-i="${i}" data-f="gpa" aria-label="GPA"></td><td><input type="number" min="0" max="5" class="in" style="width:60px;padding:4px 8px" value="${r.w}" data-ch="gpaF" data-i="${i}" data-f="w" aria-label="Weight"></td><td><button class="icon-btn" style="width:26px;height:26px" data-act="gpaDel" data-i="${i}" aria-label="Remove">×</button></td></tr>`).join('')}</tbody></table></div>
+      <div class="row"><button class="btn sm" data-act="gpaAdd">+ Add a year</button><label class="small row">Scale <select class="in" style="width:auto;padding:4px 26px 4px 8px" data-ch="gpaScale"><option ${gp.scale === 7 ? 'selected' : ''}>7</option><option ${gp.scale === 4 ? 'selected' : ''}>4</option></select></label></div></section>
+    <section class="card flat"><div class="chead"><h3>Coming up</h3></div><ul class="tasks">${up.map(x => `<li class="task"><span class="dot" style="--h:${x.kind === 'test' ? 350 : x.kind === 'app' ? 285 : 60};margin-top:6px"></span><div class="tmain"><span class="ttitle">${esc(x.title)}</span><span class="tmeta"><span>${fmtLong(x.date)} · ${diffDays(today(), x.date)} days</span></span></div></li>`).join('') || '<li class="empty">Add test dates in the GAMSAT hub and deadlines below.</li>'}</ul></section>
+  </div>
+  <section class="card flat"><div class="chead"><h3>Applications</h3><span class="lab">${S.core.schools.length} programs</span></div>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>Program / school</th><th>Status</th><th>Deadline</th><th>Notes & requirements</th><th></th></tr></thead><tbody>${S.core.schools.map(a => `<tr><td style="min-width:170px"><input class="in" style="padding:4px 8px" value="${esc(a.name)}" data-ch="appF" data-id="${a.id}" data-f="name" aria-label="Name"></td><td><select class="in" style="padding:4px 26px 4px 8px" data-ch="appF" data-id="${a.id}" data-f="status">${APP_STATUS.map(([k, l]) => `<option value="${k}" ${a.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td><td><input type="date" class="in" style="padding:4px 8px" value="${a.deadline || ''}" data-ch="appF" data-id="${a.id}" data-f="deadline"></td><td style="min-width:220px"><input class="in" style="padding:4px 8px" value="${esc(a.notes || '')}" placeholder="GAMSAT cut-off, GPA, interview type, rural pathway…" data-ch="appF" data-id="${a.id}" data-f="notes"></td><td><button class="icon-btn" style="width:26px;height:26px" data-act="appDel" data-id="${a.id}" aria-label="Remove">×</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Add each program you might apply to. Deadlines show up in “Coming up” and on Today.</td></tr>'}</tbody></table></div>
+    <div class="addrow"><input class="in" id="app-n" placeholder="e.g. University name – Doctor of Medicine" data-enter="appAdd"><button class="btn sm" data-act="appAdd">Add</button></div></section>
+  <section class="card flat"><div class="chead"><h3>MMI practice</h3><button class="link" data-act="mmiNew">+ Log a station</button></div>
+    ${(() => { const by = MMI_TYPES.map(t => [t, S.core.mmi.filter(m => m.type === t)]); return `<div class="chip-row small">${by.map(([t, l]) => `<span class="due-chip ${l.length ? '' : 'soon'}">${esc(t)} · ${l.length}${l.length ? ` · avg ${(l.reduce((a, m) => a + (m.rating || 0), 0) / l.length).toFixed(1)}/5` : ''}</span>`).join('')}</div>`; })()}
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Station</th><th>Prompt</th><th>Self-rating</th><th>Feedback / fix</th></tr></thead><tbody>${S.core.mmi.slice().sort((a, b) => a.date < b.date ? 1 : -1).map(m => `<tr data-act="mmiEdit" data-id="${m.id}" style="cursor:pointer"><td>${fmtShort(m.date)}</td><td>${esc(m.type)}</td><td>${esc(m.prompt)}</td><td>${m.rating ? '●'.repeat(m.rating) + '○'.repeat(5 - m.rating) : '–'}</td><td>${esc(m.fix || '')}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Red chips are station types you haven\'t practised yet.</td></tr>'}</tbody></table></div></section>`;
+}
+function mmiSheet(id) {
+  const m = id ? S.core.mmi.find(x => x.id === id) : { date: today(), type: MMI_TYPES[0], prompt: '', rating: 0, fix: '' };
+  openSheet(sheetHead(id ? 'MMI station' : 'Log an MMI station') + `<div class="grid2"><div class="field"><span class="lab">Date</span><input type="date" class="in" id="mm-d" value="${m.date}"></div><div class="field"><span class="lab">Station type</span><select class="in" id="mm-t">${MMI_TYPES.map(t => `<option ${m.type === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div></div>
+    <div class="field"><span class="lab">Prompt</span><input class="in" id="mm-p" value="${esc(m.prompt)}" placeholder="e.g. A patient asks you to keep a secret from their family…" autofocus></div>
+    <div class="field"><span class="lab">Self-rating</span><div class="conf" id="mm-r">${[1, 2, 3, 4, 5].map(n => `<button class="${m.rating === n ? 'on' : ''}" data-act="segPick" data-v="${n}">${n}</button>`).join('')}</div></div>
+    <div class="field"><span class="lab">Feedback / one fix</span><textarea class="in" id="mm-f" rows="3">${esc(m.fix || '')}</textarea></div>
+    <div class="row" style="justify-content:space-between">${id ? `<button class="btn danger" data-act="mmiDel" data-id="${id}">Delete</button>` : '<span></span>'}<button class="btn pri" data-act="mmiSave" data-id="${id || ''}">Save</button></div>`);
+}
+
 /* ============================== weekly Game Plan import ============================== */
 const GD = 'Google Drive';
 const goalFor = ws => { const g = S.core.settings.gamsat; const ss = secGoalSum(ws); if (ss > 0) return ss; return g.weekGoals && g.weekGoals[ws] != null ? g.weekGoals[ws] : g.weekTarget; };
@@ -1693,6 +1857,7 @@ function importPreview() {
   const studyMin = IMP.rows.filter(r => r.on && r.kind === 'task' && r.study).reduce((a, r) => a + (r.est || 0), 0);
   const unplaced = IMP.block ? IMP.rows.filter(r => r.on && r.kind === 'task' && r.study && r.est && !P.times[r.id]).length : 0;
   return `<div class="card flat" style="gap:10px;background:var(--sunk)"><div class="row" style="justify-content:space-between"><b>Week ${w.n || ''} · ${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))}</b>${w.phase ? `<span class="small muted">${esc(w.phase)}</span>` : ''}</div>
+    ${(() => { const g2 = S.core.settings.gamsat; const hits = [[g2.s2Date, 'Section II'], [g2.date, 'Sections I + III']].filter(([d]) => d && d >= ws && d <= addDays(ws, 6)); return hits.length ? `<p class="small over"><b>Your real ${hits.map(h => h[1] + ' (' + fmtShort(h[0]) + ')').join(' and ')} falls in this week.</b> Untick any mocks or heavy practice here, since this should be a taper week.</p>` : ''; })()}
     ${w.mismatch ? `<p class="small over">Your doc says this week starts “${esc(w.dateText)}”. Going by the week number, I've used ${fmt(ws, { day: 'numeric', month: 'short', year: 'numeric' })}. You may want to fix the date in the doc.</p>` : ''}
     <label class="row small"><input type="checkbox" id="imp-goal" ${IMP.setGoal ? 'checked' : ''} data-ch="impGoal"> Set this week's study goal to <input type="number" min="0" max="80" step="0.5" class="in" style="width:80px;padding:4px 8px" value="${IMP.hpw ?? ''}" data-ch="impHpw"> hours ${IMP.hpw == null ? '<span class="muted">(no HPW in the doc)</span>' : ''}</label>
     <div class="row small"><span>Section goals this week:</span>${['S1', 'S2', 'S3'].map(k => `<span class="secpill ${k}">${k}</span><input type="number" min="0" max="60" step="0.5" class="in" style="width:64px;padding:4px 6px" value="${(IMP.sec || {})[k] ?? ''}" placeholder="–" data-ch="impSec" data-s="${k}" aria-label="${k} hours">`).join('')}<span class="muted">h (optional, from your calculator)</span></div>
@@ -1771,7 +1936,7 @@ function impCreate() {
   toast(`Added ${nT} tasks and ${nB} time blocks for the week of ${fmtShort(ws)}`);
 }
 
-const VIEWS = { today: vToday, tasks: vTasks, plan: vPlan, projects: vProjects, gamsat: vGamsat, habits: vHabits, reflect: vReflect, wellness: vWellness, settings: vSettings };
+const VIEWS = { med: vMed, today: vToday, tasks: vTasks, plan: vPlan, projects: vProjects, gamsat: vGamsat, habits: vHabits, reflect: vReflect, wellness: vWellness, settings: vSettings };
 
 /* ============================== sheets ============================== */
 let sheetClose = null;
@@ -1882,7 +2047,7 @@ function logStudySheet() {
     <div class="row" style="justify-content:flex-end"><button class="btn pri" data-act="logStudySave">Log it</button></div>`);
 }
 function moreSheet() {
-  openSheet(sheetHead('More') + `<div class="navg">${[['plan', 'Week & month'], ['projects', 'Projects'], ['habits', 'Habits'], ['reflect', 'Reflect'], ['wellness', 'Wellness'], ['settings', 'Customise']].map(([v, l]) => `<button class="nav ${UI.view === v ? 'on' : ''}" data-act="go" data-v="${v}">${ICON[v]}${l}</button>`).join('')}<button class="nav" data-act="focus">${ICON.timer}Focus timer</button></div><div class="sync ${syncState}"><i></i><span>${syncLabel()}</span></div>`);
+  openSheet(sheetHead('More') + `<div class="navg">${[['plan', 'Week & month'], ['projects', 'Projects'], ['med', 'Med school'], ['habits', 'Habits'], ['reflect', 'Reflect'], ['wellness', 'Wellness'], ['settings', 'Customise']].map(([v, l]) => `<button class="nav ${UI.view === v ? 'on' : ''}" data-act="go" data-v="${v}">${ICON[v]}${l}</button>`).join('')}<button class="nav" data-act="focus">${ICON.timer}Focus timer</button></div><div class="sync ${syncState}"><i></i><span>${syncLabel()}</span></div>`);
 }
 
 /* ---- quick add + search ---- */
@@ -2084,6 +2249,27 @@ const ACT = {
   pick: el => { UI.pick = UI.pick === el.dataset.id ? null : el.dataset.id; render(); },
   slot: (el, e) => { if (e.target !== el) return; const r = el.getBoundingClientRect(); const min = snap15(+el.dataset.a * 60 + (e.clientY - r.top) / CAL_PX * 60); if (UI.pick) { scheduleTask(UI.pick, el.dataset.date, min); return; } blockSheet(el.dataset.date, null, false, toTime(min)); },
   calToggle: (el, e) => { e.stopPropagation(); toggleTask(el.dataset.id); },
+  goWeek: () => { UI.view = 'gamsat'; UI.gTab = 'week'; saveUI(); render(); window.scrollTo(0, 0); },
+  keyDone: el => { const g = S.core.settings.gamsat; g.keyDone = g.keyDone || {}; g.keyDone[el.dataset.k] = !g.keyDone[el.dataset.k]; commit('core'); },
+  keyAdd: () => { const t = val('ck-t').trim(), d = val('ck-d'); if (!t || !d) { toast('Add a name and a date'); return; } const g = S.core.settings.gamsat; (g.customKeys = g.customKeys || []).push({ id: uid(), title: t, date: d }); commit('core'); },
+  keyDel: el => { const g = S.core.settings.gamsat; g.customKeys = (g.customKeys || []).filter(c => c.id !== el.dataset.id); commit('core'); },
+  prepTasks: () => prepTasks(),
+  scaffold: () => scaffoldSheet(),
+  scafTick: el => { const g = S.core.settings.gamsat; g.scaffold = g.scaffold || {}; const st = g.scaffold[el.dataset.ws] = g.scaffold[el.dataset.ws] || {}; st[el.dataset.k] = !st[el.dataset.k]; touch('core'); scaffoldSheet(); },
+  scafReflect: el => { UI.view = 'reflect'; UI.date = el.dataset.date; closeSheet(); window.scrollTo(0, 0); },
+  scafCal: el => { UI.view = 'plan'; UI.planMode = 'week'; UI.planDate = el.dataset.date; closeSheet(); window.scrollTo(0, 0); },
+  mockNew: () => mockSheet(),
+  mockCreate: () => mockCreate(),
+  ideaF: el => { UI.ideaTheme = el.dataset.v; render(); },
+  ideaAdd: () => { const th = val('id-th').trim(), idea = val('id-idea').trim(); if (!th || !idea) { toast('Add a theme and an idea'); return; } S.core.ideas.push({ id: uid(), theme: th[0].toUpperCase() + th.slice(1), idea, example: val('id-ex').trim(), created: Date.now() }); UI.ideaTheme = th[0].toUpperCase() + th.slice(1); commit('core'); },
+  ideaDel: el => withUndo('Idea deleted', ['core'], () => { S.core.ideas = S.core.ideas.filter(i => i.id !== el.dataset.id); commit('core'); }),
+  gpaAdd: () => { S.core.gpa.years.push({ label: 'Year', gpa: '', w: 0 }); commit('core'); },
+  gpaDel: el => { S.core.gpa.years.splice(+el.dataset.i, 1); commit('core'); },
+  appAdd: () => { const n = val('app-n').trim(); if (!n) return; S.core.schools.push({ id: uid(), name: n, status: 'research', deadline: '', notes: '' }); commit('core'); },
+  appDel: el => withUndo('Program removed', ['core'], () => { S.core.schools = S.core.schools.filter(a => a.id !== el.dataset.id); commit('core'); }),
+  mmiNew: () => mmiSheet(), mmiEdit: el => mmiSheet(el.dataset.id),
+  mmiSave: el => { const r = $('#mm-r .on'); const m = { date: val('mm-d') || today(), type: val('mm-t'), prompt: val('mm-p').trim(), rating: r ? +r.dataset.v : 0, fix: val('mm-f').trim() }; const id = el.dataset.id; if (id) Object.assign(S.core.mmi.find(x => x.id === id), m); else S.core.mmi.push({ id: uid(), ...m }); touch('core'); closeSheet(); },
+  mmiDel: el => { closeSheet(); withUndo('Station deleted', ['core'], () => { S.core.mmi = S.core.mmi.filter(x => x.id !== el.dataset.id); commit('core'); }); },
   gTab: el => { UI.gTab = el.dataset.v; saveUI(); render(); },
   topicView: el => { UI.topicView = el.dataset.v; render(); },
   loadWorkbook: () => loadWorkbook(),
@@ -2162,8 +2348,15 @@ const ACT = {
 };
 
 const CH = {
+  gS2Date: el => { S.core.settings.gamsat.s2Date = el.value; commit('core'); },
+  gKey: el => { const g = S.core.settings.gamsat; g.keys = g.keys || {}; g.keys[el.dataset.k] = el.value; commit('core'); },
+  paceDiag: el => { const g = S.core.settings.gamsat; g.pace = g.pace || {}; g.pace[el.dataset.s === 'S2' ? 'S2start' : el.dataset.s] = el.value === '' ? '' : Math.max(0, +el.value); commit('core'); },
+  paceDate: el => { const g = S.core.settings.gamsat; g.pace = g.pace || {}; g.pace[el.dataset.k] = el.value; commit('core'); },
+  gpaF: el => { const r = S.core.gpa.years[+el.dataset.i]; const f = el.dataset.f; r[f] = f === 'label' ? el.value : el.value === '' ? '' : Math.max(0, +el.value); commit('core'); },
+  gpaScale: el => { S.core.gpa.scale = +el.value; commit('core'); },
+  appF: el => { const a = S.core.schools.find(x => x.id === el.dataset.id); if (a) { a[el.dataset.f] = el.value; commit('core'); } },
   mkTopic: el => { $('#mk-new').hidden = el.value !== '_new'; },
-  gSecGoal: el => { const g = S.core.settings.gamsat; g.secGoals = g.secGoals || {}; const cur = g.secGoals[el.dataset.ws] = g.secGoals[el.dataset.ws] || {}; cur[el.dataset.s] = el.value === '' ? '' : clamp(+el.value, 0, 60); commit('core'); },
+  gSecGoal: el => { const g = S.core.settings.gamsat; g.secGoals = g.secGoals || {}; const cur = g.secGoals[el.dataset.ws] = g.secGoals[el.dataset.ws] || {}; cur[el.dataset.s] = el.value === '' ? '' : clamp(+el.value, 0, 60); if (el.closest('#sheet')) { touch('core'); pendingRender = true; } else commit('core'); },
   impSec: el => { IMP.sec = IMP.sec || {}; IMP.sec[el.dataset.s] = el.value === '' ? '' : clamp(+el.value, 0, 60); shareMinutes(); importSheet(); },
   pickDay: el => { if (el.value) { UI.date = el.value; render(); } },
   sleep: el => { const d = day(UI.date, true); d.sleep = el.value === '' ? undefined : clamp(+el.value, 0, 16); delete d.exW; touch(dayKey(UI.date)); },
@@ -2232,13 +2425,14 @@ function welcome() {
   $('#side').innerHTML = ''; $('#bnav').innerHTML = '';
   $('#main').innerHTML = `<div class="welcome card"><span class="lab">Welcome</span><h1 class="title">Your days, <em>in one calm place.</em></h1>
     <p class="muted">Tasks that carry over until you deal with them, time blocks, habits with honest streaks, a GAMSAT study hub, and room to reflect.</p>
-    <div class="grid2"><div class="field"><span class="lab">What should I call you?</span><input class="in" id="w-name" placeholder="Your first name" autofocus></div><div class="field"><span class="lab">GAMSAT sitting date (optional)</span><input type="date" class="in" id="w-g"></div></div>
+    <div class="grid2"><div class="field"><span class="lab">What should I call you?</span><input class="in" id="w-name" placeholder="Your first name" autofocus></div><div class="field"><span class="lab">GAMSAT S1 + S3 date (optional)</span><input type="date" class="in" id="w-g"></div></div>
     <div class="row"><button class="btn pri" data-act="startFresh" data-ex="1">Start with examples</button><button class="btn" data-act="startFresh" data-ex="0">Start blank</button></div>
     <p class="small muted">Examples show how everything fits together. They're tagged and you can clear them in one tap.</p></div>`;
 }
 function startApp(withEx) {
   S.core = blankCore(); S.tasks = { _u: Date.now(), list: [] };
   S.core.settings.name = val('w-name').trim(); S.core.settings.gamsat.date = val('w-g');
+  normalise();
   if (withEx) seedExamples();
   booted = true; touch(...allKeys()); render();
 }
