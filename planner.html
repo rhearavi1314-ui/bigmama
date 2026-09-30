@@ -1250,6 +1250,7 @@ function vGamsat() {
         ${od.length ? `<div class="carry"><div class="chead"><span class="over">${od.length} overdue</span><button class="link" data-act="moveAllG">Move to today</button></div><ul class="tasks">${od.map(t => taskRow(t)).join('')}</ul></div>` : ''}
         <ul class="tasks">${td.map(t => taskRow(t)).join('') || '<li class="empty">Nothing set for today.</li>'}</ul>
         ${up.length ? `<span class="lab">Next 7 days</span><ul class="tasks">${up.map(t => taskRow(t, { date: true })).join('')}</ul>` : ''}
+        ${(() => { const nd = sortTasks(gts.filter(t => !t.done && !t.date)); return nd.length ? `<span class="lab">No day set yet · ${nd.length}</span><ul class="tasks">${nd.map(t => taskRow(t)).join('')}</ul><p class="small muted">Give one a date in its sheet, or drag it onto the calendar (Week & month → “No date”).</p>` : ''; })()}
         <div class="addrow"><select class="in" id="g-sec" style="flex:0 0 76px"><option>S1</option><option>S2</option><option selected>S3</option><option value="">Any</option></select><input class="in" id="g-add" placeholder="e.g. Buffers practice set tomorrow 45m" data-enter="addG"><button class="btn sm" data-act="addG">Add</button></div></section>
     </div>
     ${UI.gTab === 'content' ? contentTracker() : ''}
@@ -2034,6 +2035,7 @@ function shareMinutes() {
   for (const r of flex) r.est = total ? each : (r.est || 45);
 }
 /* assign days + times; returns the plan without touching state */
+const undated = r => r.kind === 'task' && (r.day === 'none' || (r.day == null && IMP.auto === false));
 function planImport() {
   const ws = IMP.week.start, st = S.core.settings;
   const dates = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
@@ -2046,9 +2048,9 @@ function planImport() {
     for (const [s, e] of bs) { if (s - cur >= 20) out.push([cur, s]); cur = Math.max(cur, e + (e - s >= 180 ? 30 : 10)); } if (end - cur >= 20) out.push([cur, end]); return out; };
   const cap = dates.map((d, i) => { const f = free(i).reduce((a, [s, e]) => a + (e - s), 0); return hasEvent[i] ? Math.round(f * 0.25) : f; });
   const load = dates.map(() => 0);
-  const rows = IMP.rows.filter(r => r.on && r.kind === 'task');
-  for (const r of rows) if (r.day != null) load[r.day] += r.est || 0;
-  const auto = rows.filter(r => r.day == null).sort((a, b) => (b.est || 0) - (a.est || 0));
+  const rows = IMP.rows.filter(r => r.on && r.kind === 'task' && !undated(r));
+  for (const r of rows) if (typeof r.day === 'number') load[r.day] += r.est || 0;
+  const auto = rows.filter(r => typeof r.day !== 'number').sort((a, b) => (b.est || 0) - (a.est || 0));
   const assigned = {};
   for (const r of auto) {
     let best = -1, bestRoom = -Infinity;
@@ -2057,10 +2059,10 @@ function planImport() {
     assigned[r.id] = best; load[best] += r.est || 0;
   }
   const times = {};
-  if (IMP.block) for (let i = 0; i < 7; i++) {
+  if (IMP.block && IMP.auto !== false) for (let i = 0; i < 7; i++) {
     const slots = free(i).map(x => x.slice());
     for (const r of rows.filter(r => r.at && r.day === i)) times[r.id] = r.at;
-    for (const r of rows.filter(r => (r.day ?? assigned[r.id]) === i && r.study && r.est && !r.at)) {
+    for (const r of rows.filter(r => (typeof r.day === 'number' ? r.day : assigned[r.id]) === i && r.study && r.est && !r.at)) {
       const EARLY = 9 * 60;
       let k = slots.findIndex(([s, e]) => e - Math.max(s, EARLY) >= r.est), s;
       if (k >= 0) s = Math.max(slots[k][0], EARLY); else { k = slots.findIndex(([a, e]) => e - a >= r.est); if (k < 0) continue; s = slots[k][0]; } times[r.id] = [toTime(s), toTime(s + r.est)]; if (s === slots[k][0]) slots[k][0] = s + r.est + 10; else slots.splice(k + 1, 0, [s + r.est + 10, slots[k][1]]), slots[k][1] = s;
@@ -2103,22 +2105,23 @@ function importSheet() {
 function importPreview() {
   const w = IMP.week, ws = w.start, P = planImport();
   const DN = i => fmt(P.dates[i], { weekday: 'short', day: 'numeric' });
-  const daySel = r => `<select class="in" style="padding:5px 26px 5px 8px;font-size:13px;min-width:118px" data-ch="impDay" data-id="${r.id}">${r.day == null ? `<option value="" selected>Auto: ${DN(P.assigned[r.id] ?? 0)}</option>` : '<option value="">Auto</option>'}${P.dates.map((d, i) => `<option value="${i}" ${r.day === i ? 'selected' : ''}>${DN(i)}</option>`).join('')}</select>`;
+  const daySel = r => `<select class="in" style="padding:5px 26px 5px 8px;font-size:13px;min-width:118px" data-ch="impDay" data-id="${r.id}">${r.kind === 'task' ? (IMP.auto === false ? `<option value="" ${r.day == null ? 'selected' : ''}>No date</option>` : `<option value="" ${r.day == null ? 'selected' : ''}>${r.day == null ? `Auto: ${DN(P.assigned[r.id] ?? 0)}` : 'Auto'}</option><option value="none" ${r.day === 'none' ? 'selected' : ''}>No date</option>`) : ''}${P.dates.map((d, i) => `<option value="${i}" ${r.day === i ? 'selected' : ''}>${DN(i)}</option>`).join('')}</select>`;
   const groups = ['Commitments', 'Set days', 'Must do', 'Evaluation', 'Do if time', 'Planning'];
   const already = S.core.settings.gamsat.imported && S.core.settings.gamsat.imported[ws];
   const studyMin = IMP.rows.filter(r => r.on && r.kind === 'task' && r.study).reduce((a, r) => a + (r.est || 0), 0);
-  const unplaced = IMP.block ? IMP.rows.filter(r => r.on && r.kind === 'task' && r.study && r.est && !P.times[r.id]).length : 0;
+  const unplaced = IMP.block && IMP.auto !== false ? IMP.rows.filter(r => r.on && r.kind === 'task' && r.study && r.est && !P.times[r.id]).length : 0;
   return `<div class="card flat" style="gap:10px;background:var(--sunk)"><div class="row" style="justify-content:space-between"><b>Week ${w.n || ''} · ${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))}</b>${w.phase ? `<span class="small muted">${esc(w.phase)}</span>` : ''}</div>
     ${(() => { const g2 = S.core.settings.gamsat; const hits = [[g2.s2Date, 'Section II'], [g2.date, 'Sections I + III']].filter(([d]) => d && d >= ws && d <= addDays(ws, 6)); return hits.length ? `<p class="small over"><b>Your real ${hits.map(h => h[1] + ' (' + fmtShort(h[0]) + ')').join(' and ')} falls in this week.</b> Untick any mocks or heavy practice here, since this should be a taper week.</p>` : ''; })()}
     ${w.mismatch ? `<p class="small over">Your doc says this week starts “${esc(w.dateText)}”. Going by the week number, I've used ${fmt(ws, { day: 'numeric', month: 'short', year: 'numeric' })}. You may want to fix the date in the doc.</p>` : ''}
     <label class="row small"><input type="checkbox" id="imp-goal" ${IMP.setGoal ? 'checked' : ''} data-ch="impGoal"> Set this week's study goal to <input type="number" min="0" max="80" step="0.5" class="in" style="width:80px;padding:4px 8px" value="${IMP.hpw ?? ''}" data-ch="impHpw"> hours ${IMP.hpw == null ? '<span class="muted">(no HPW in the doc)</span>' : ''}</label>
     <div class="row small"><span>Section goals this week:</span>${['S1', 'S2', 'S3'].map(k => `<span class="secpill ${k}">${k}</span><input type="number" min="0" max="60" step="0.5" class="in" style="width:64px;padding:4px 6px" value="${(IMP.sec || {})[k] ?? ''}" placeholder="–" data-ch="impSec" data-s="${k}" aria-label="${k} hours">`).join('')}<span class="muted">h (optional, from your calculator)</span></div>
-    <label class="row small"><input type="checkbox" ${IMP.block ? 'checked' : ''} data-ch="impBlock"> Block time for study tasks in my free time (${pad(S.core.settings.dayStart)}:00–${pad(S.core.settings.dayEnd)}:00)</label>
+    <label class="row small" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" style="margin-top:3px" ${IMP.auto !== false ? 'checked' : ''} data-ch="impAuto"> <span><b>Pick days &amp; times for me.</b> Off: tasks without a set day come in with no date, ready to schedule when you choose.</span></label>
+    <label class="row small" ${IMP.auto === false ? 'hidden' : ''}><input type="checkbox" ${IMP.block ? 'checked' : ''} data-ch="impBlock"> Block time for study tasks in my free time (${pad(S.core.settings.dayStart)}:00–${pad(S.core.settings.dayEnd)}:00)</label>
     ${already ? `<label class="row small"><input type="checkbox" ${IMP.replace ? 'checked' : ''} data-ch="impReplace"> Replace what I imported for this week before (keeps anything you've ticked off)</label>` : ''}
     <p class="small">${fmtMin(studyMin)} of study planned${(() => { const ss = ['S1', 'S2', 'S3'].reduce((a, k) => a + (+(IMP.sec || {})[k] || 0), 0); return ss ? ` against ${ss}h of section goals` : IMP.hpw ? ` against a ${IMP.hpw}h goal` : ''; })()}${unplaced ? ` · <span class="over">${unplaced} task${unplaced > 1 ? 's' : ''} didn't fit in free time and will be added without a time block</span>` : ''}.</p></div>
     ${groups.map(gname => { const rs = IMP.rows.filter(r => r.group === gname); if (!rs.length) return '';
       return `<div class="field" style="gap:4px"><span class="lab">${gname}${gname === 'Do if time' ? ' · tick the ones you want' : ''}</span><div class="table-wrap"><table class="tbl"><tbody>${rs.map(r => {
-        const when = r.kind === 'block' ? `${r.s}–${r.e}` : r.kind === 'event' ? 'all day' : P.times[r.id] ? `${P.times[r.id][0]}–${P.times[r.id][1]}` : r.est ? 'no slot' : '';
+        const when = r.kind === 'block' ? `${r.s}–${r.e}` : r.kind === 'event' ? 'all day' : undated(r) ? 'no date' : P.times[r.id] ? `${P.times[r.id][0]}–${P.times[r.id][1]}` : r.est ? 'no slot' : '';
         return `<tr style="${r.on ? '' : 'opacity:.55'}"><td style="width:28px"><input type="checkbox" ${r.on ? 'checked' : ''} data-ch="impOn" data-id="${r.id}" aria-label="Include"></td><td style="min-width:200px">${secPill(r.sec)} ${esc(r.title)}</td><td>${daySel(r)}</td><td style="white-space:nowrap">${r.kind === 'task' ? `<input type="number" min="0" step="15" class="in" style="width:70px;padding:4px 8px" value="${r.est || ''}" data-ch="impEst" data-id="${r.id}" aria-label="Minutes"> m` : ''}</td><td class="small muted" style="white-space:nowrap">${when}</td></tr>`; }).join('')}</tbody></table></div></div>`; }).join('')}
     <div class="row" style="justify-content:flex-end"><button class="btn" data-act="close">Cancel</button><button class="btn pri" data-act="impCreate">Add to my week</button></div>`;
 }
@@ -2171,13 +2174,13 @@ function impCreate() {
   }
   let nT = 0, nB = 0;
   for (const r of IMP.rows.filter(r => r.on)) {
-    const i = r.day ?? P.assigned[r.id] ?? 0; const d = P.dates[i];
+    const nd = undated(r); const i = nd ? 0 : (typeof r.day === 'number' ? r.day : P.assigned[r.id] ?? 0); const d = P.dates[i];
     if (r.kind === 'event') { const dd = day(d, true); (dd.events = dd.events || []).push({ id: uid(), t: r.title, imp: ws }); keys.add(dayKey(d)); }
     else if (r.kind === 'block') { const dd = day(d, true); (dd.blocks = dd.blocks || []).push({ id: uid(), s: r.s, e: r.e, t: r.title, cat: r.cat || '', imp: ws }); keys.add(dayKey(d)); nB++; }
     else {
-      const t = newTask({ title: r.title, date: d, cat: r.study ? (r.cat || '') : (gamsatCat() ? gamsatCat().id : ''), sec: r.sec || '', est: r.est || 0, pri: r.pri || 0, imp: ws });
+      const t = newTask({ title: r.title, date: nd ? null : d, cat: r.study ? (r.cat || '') : (gamsatCat() ? gamsatCat().id : ''), sec: r.sec || '', est: r.est || 0, pri: r.pri || 0, imp: ws });
       S.tasks.list.push(t); nT++;
-      if (P.times[r.id]) { const dd = day(d, true); (dd.blocks = dd.blocks || []).push({ id: uid(), s: P.times[r.id][0], e: P.times[r.id][1], t: r.title, cat: t.cat, imp: ws, taskId: t.id }); keys.add(dayKey(d)); nB++; }
+      if (!nd && P.times[r.id]) { const dd = day(d, true); (dd.blocks = dd.blocks || []).push({ id: uid(), s: P.times[r.id][0], e: P.times[r.id][1], t: r.title, cat: t.cat, imp: ws, taskId: t.id }); keys.add(dayKey(d)); nB++; }
     }
   }
   if (IMP.setGoal && IMP.hpw != null) { g.weekGoals = g.weekGoals || {}; g.weekGoals[ws] = IMP.hpw; }
@@ -2648,7 +2651,8 @@ const CH = {
   gDate: el => { S.core.settings.gamsat.date = el.value; commit('core'); },
   gWeekGoal: el => { const g = S.core.settings.gamsat; g.weekGoals = g.weekGoals || {}; g.weekGoals[el.dataset.ws] = clamp(+el.value || 0, 0, 80); commit('core'); },
   impOn: el => { const r = IMP.rows.find(x => x.id === el.dataset.id); r.on = el.checked; shareMinutes(); importSheet(); },
-  impDay: el => { const r = IMP.rows.find(x => x.id === el.dataset.id); r.day = el.value === '' ? null : +el.value; importSheet(); },
+  impDay: el => { const r = IMP.rows.find(x => x.id === el.dataset.id); r.day = el.value === '' ? null : el.value === 'none' ? 'none' : +el.value; importSheet(); },
+  impAuto: el => { IMP.auto = el.checked; importSheet(); },
   impEst: el => { const r = IMP.rows.find(x => x.id === el.dataset.id); r.est = Math.max(0, +el.value || 0); r.estLocked = true; shareMinutes(); importSheet(); },
   impHpw: el => { IMP.hpw = el.value === '' ? null : clamp(+el.value, 0, 80); IMP.setGoal = IMP.hpw != null; shareMinutes(); importSheet(); },
   impGoal: el => { IMP.setGoal = el.checked; },
