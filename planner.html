@@ -495,7 +495,7 @@ const FONTS = {
   modern: { name: 'Modern', d: "'Bricolage Grotesque', system-ui, sans-serif" },
 };
 const SECS = { S1: 'Reasoning in Humanities & Social Sciences', S2: 'Written Communication', S3: 'Reasoning in Biological & Physical Sciences' };
-const CARDS = { top3: 'Top 3 priorities', todo: 'To-do list', schedule: 'Time blocks', habits: 'Habits', checkin: 'Check-in', gamsat: 'GAMSAT', spare: 'Spare time (resources)', projects: 'Projects', reflect: 'Reflection' };
+const CARDS = { top3: 'Top 3 priorities', todo: 'To-do list', schedule: 'Time blocks', habits: 'Habits', checkin: 'Check-in', gamsat: 'GAMSAT', projects: 'Projects', reflect: 'Reflection' };
 const REPEATS = { '': 'Does not repeat', daily: 'Every day', weekdays: 'Every weekday', weekly: 'Every week', fortnightly: 'Every 2 weeks', monthly: 'Every month' };
 const REVIEW_GAP = [0, 1, 4, 14, 30, 30];
 
@@ -1205,12 +1205,12 @@ function vProject(p) {
 
 /* ============================== GAMSAT ============================== */
 function topicDue(tp) { return addDays(tp.last || today(), REVIEW_GAP[tp.conf] || 7); }
-const gH = t => (UI.gTab || 'week') === t ? '' : 'hidden';
+const gH = t => (['week', 'content', 'practice'].includes(UI.gTab) ? UI.gTab : 'week') === t ? '' : 'hidden';
 function gTabs() {
-  const T = today(); const tab = UI.gTab || 'week';
+  const T = today(); if (!['week', 'content', 'practice'].includes(UI.gTab)) UI.gTab = 'week'; const tab = UI.gTab;
   const od = overdue().filter(isGamsat).length;
   const q = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp))).length;
-  const tabs = [['week', 'This week', od ? `<span class="cnt">${od}</span>` : ''], ['content', 'Content', q ? `<span class="cnt acc">${q}</span>` : ''], ['practice', 'Practice', ''], ['resources', 'Resources', '']];
+  const tabs = [['week', 'This week', od ? `<span class="cnt">${od}</span>` : ''], ['content', 'Content', q ? `<span class="cnt acc">${q}</span>` : ''], ['practice', 'Practice', '']];
   return `<div class="tabs" role="tablist">${tabs.map(([k, l, b]) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-act="gTab" data-v="${k}">${l}${b}</button>`).join('')}</div>`;
 }
 function vGamsat() {
@@ -1254,7 +1254,6 @@ function vGamsat() {
         <p class="small muted">Overall uses ACER's weighting: (S1 + S2 + 2 × S3) ÷ 4. Practice-paper percentages are not scaled scores, so use this to track your trend, not to predict your result.</p></section>
     </div>
     <div ${gH('practice')}>${ideasCard()}</div>
-    ${UI.gTab === 'resources' ? resourcesTab() : ''}
     <section class="card flat" ${gH('practice')}><div class="chead"><h3>Section II essay log</h3><button class="link" data-act="essayNew">+ Log an essay</button></div>
       <div class="table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Task</th><th>Theme</th><th>Time</th><th>Words</th><th>Self-rating</th><th>Fix next time</th></tr></thead><tbody>
       ${S.core.essays.slice().sort((a, b) => a.date < b.date ? 1 : -1).map(e => `<tr data-act="essayEdit" data-id="${e.id}" style="cursor:pointer"><td>${fmtShort(e.date)}</td><td>${e.task}</td><td>${esc(e.theme)}${e.ex ? ' <span class="ex">example</span>' : ''}</td><td>${e.min ? e.min + 'm' : '–'}</td><td>${e.words || '–'}</td><td>${e.rating ? '●'.repeat(e.rating) + '○'.repeat(5 - e.rating) : '–'}</td><td style="min-width:220px">${esc(e.fix || '')}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Log each timed essay with one concrete fix for next time. Patterns show up fast.</td></tr>'}</tbody></table></div></section>`;
@@ -1824,7 +1823,6 @@ const ROUTINE = [
   ['start', 'Start here · once', '20 minutes, then never again', [
     ['Type your exact test dates and key dates once ACER registration opens (Nov).', 'GAMSAT → This week', 'goTab', 'week'],
     ['Load your syllabus from your Notion workbooks.', 'GAMSAT → Content', 'goTab', 'content'],
-    ['Add your resources: Drive folders, your Mac folder, and the ACER list. Remove groups you won\'t use.', 'GAMSAT → Resources', 'goTab', 'resources'],
     ['Set your pace dates and diagnostic paces.', 'GAMSAT → Practice', 'goTab', 'practice'],
     ['Add your uni and placement timetable as repeating blocks (tap a block, pick days).', 'Week calendar', 'goPlan', 'week'],
     ['Clear the example content and add your own habits.', 'Customise', 'go', 'settings'],
@@ -1853,7 +1851,6 @@ const ROUTINE = [
     ['Did questions? Log the drill: questions, correct, minutes.', 'Log a drill', 'drillNew', ''],
     ['Every wrong or guessed question: “Log a wrong answer” here (20 seconds), then the full write-up in your Notion analysis database.', 'Log a wrong answer', 'mistakeNew', ''],
     ['Reviewed content? Tick the topic and rate your understanding.', 'Syllabus', 'goTab', 'content'],
-    ['Tick off the resources you used.', 'Resources', 'goTab', 'resources'],
     ['Wrote an essay? Log it, then add one reusable idea to your ideas bank.', 'Log an essay', 'essayNew', ''],
   ]],
   ['night', 'Every night', '5 minutes', [
@@ -1861,9 +1858,6 @@ const ROUTINE = [
     ['Write three lines: a win, what got in the way, something you\'re grateful for.', '', '', ''],
     ['Leave unfinished tasks. They carry over to tomorrow on their own.', '', '', ''],
     ['Peek at tomorrow with the → arrow on Today.', '', '', ''],
-  ]],
-  ['spare', 'Got spare time?', '', [
-    ['Open “Spare time?” on Today and do one. Papers saved for mocks are never suggested.', 'Spare time', 'goTab', 'resources'],
   ]],
   ['mock', 'After a mock', 'the next 2 days', [
     ['Do the review tasks it added for you: mark it, then review every wrong or guessed question.', '', '', ''],
