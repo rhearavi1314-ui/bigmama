@@ -183,6 +183,47 @@ textarea.in{resize:vertical;min-height:70px;line-height:1.5}
 .gl span{font-size:12.5px;color:var(--muted)}
 .gl.alert{background:var(--bad-soft);border-color:transparent}.gl.alert b{color:var(--bad)}
 .gl.good b{color:var(--good)}
+.subtog{font-family:var(--f-mono);font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 6px;flex:none;margin-top:1px}
+.subtog.open{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent}
+.task .subtog:not(.open){opacity:.75}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+li.subs{padding:0 0 8px 30px;display:flex;flex-direction:column;gap:6px}
+li.subs .task{padding:5px 0;border:0;font-size:14px}
+li.subs .chk{width:17px;height:17px;border-radius:5px}
+li.subs .chk::after{left:5px;top:1px;width:4px;height:9px}
+li.subs .in{padding:6px 10px;font-size:13.5px}
+.cal-wrap{display:grid;grid-template-columns:210px minmax(0,1fr);gap:14px;align-items:start}
+.tray{position:sticky;top:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 32px);overflow:auto}
+.tchips{display:flex;flex-direction:column;gap:6px}
+.tchip{border:1px solid var(--line);border-left:3px solid oklch(var(--dotL) 0.13 var(--h));background:var(--surface);border-radius:9px;padding:7px 9px;font-size:13px;text-align:left;cursor:grab;user-select:none;display:flex;flex-direction:column;gap:2px;flex:none}
+.tchip .secpill{align-self:flex-start}
+.tchip small{font-size:11px;color:var(--muted)}
+.tchip.picked{outline:2px solid var(--accent);background:var(--accent-soft)}
+.tchip.lifting,.cblk.lifting{opacity:.4}
+.cal{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:auto;max-height:78vh}
+.cal-grid{display:grid;grid-template-columns:46px repeat(var(--cols),minmax(var(--minc),1fr))}
+.cal-h{position:sticky;top:0;z-index:6;background:var(--surface);border-bottom:1px solid var(--line);border-left:1px solid var(--line);padding:8px;text-align:left;font-size:13px}
+.cal-h b{font-family:var(--f-display);font-weight:400;font-size:22px}
+.cal-h.today b{color:var(--accent-ink)}
+.cal-h.gut{border-left:0;left:0;z-index:7}
+div.gut{position:relative}
+div.gut span{position:absolute;right:6px;font-family:var(--f-mono);font-size:10px;color:var(--faint);transform:translateY(-50%)}
+div.gut span:first-child{transform:none}
+.cal-col{position:relative;border-left:1px solid var(--line);background-image:linear-gradient(var(--line) 1px,transparent 1px);background-size:100% 48px;cursor:cell}
+.cal-col.today{background-color:color-mix(in oklch,var(--accent-soft) 40%,transparent)}
+.cblk{position:absolute;border-radius:8px;padding:3px 7px 6px;font-size:12px;overflow:hidden;text-align:left;background:oklch(var(--chipL) var(--chipC) var(--h));color:oklch(var(--chipTL) 0.1 var(--h));border-left:3px solid oklch(var(--dotL) 0.13 var(--h));line-height:1.25;cursor:grab;z-index:2}
+.cblk.rec{cursor:pointer}
+.cblk b{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis}
+.cblk small{font-family:var(--f-mono);font-size:10px;opacity:.85}
+.cblk.done b{text-decoration:line-through;opacity:.6}
+.cchk{float:right;width:14px;height:14px;border:1.5px solid currentColor;border-radius:4px;margin:1px 0 0 4px;position:relative;cursor:pointer}
+.cchk.on{background:currentColor}
+.rsz{position:absolute;left:0;right:0;bottom:0;height:7px;cursor:ns-resize}
+.cblk:hover .rsz{background:linear-gradient(transparent 3px,oklch(var(--dotL) 0.13 var(--h) / .6) 3px 5px,transparent 5px)}
+.preview{position:absolute;left:3px;right:3px;border:2px dashed var(--accent);border-radius:8px;background:var(--accent-soft);pointer-events:none;z-index:5;font-family:var(--f-mono);font-size:11px;padding:2px 6px;color:var(--accent-ink)}
+.ghost{position:fixed;pointer-events:none;z-index:80;background:var(--ink);color:var(--bg);padding:6px 10px;border-radius:9px;font-size:13px;box-shadow:var(--shadow);max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.dragging,body.dragging *{cursor:grabbing!important;user-select:none}
+@media (max-width:899px){.cal-wrap{grid-template-columns:minmax(0,1fr)}.tray{position:static;max-height:none}.tchips{flex-direction:row;overflow-x:auto;padding-bottom:4px}.tchip{max-width:220px;min-width:150px}.cal{max-height:70vh}}
 .carry{background:var(--bad-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
 .carry .chead{font-size:13px}
 .carry .task{border-color:color-mix(in oklch,var(--bad) 18%,transparent)}
@@ -873,8 +914,11 @@ function taskRow(t, o = {}) {
   const T = today(); const od = !t.done && t.date && t.date < T;
   const subsDone = t.subs.filter(s => s.done).length;
   const proj = t.projectId && S.core.projects.find(p => p.id === t.projectId);
-  const meta = [catChip(t.cat), secPill(t.sec), od ? `<span class="over">from ${fmtShort(t.date)}</span>` : '', o.date && t.date && !od ? `<span>${t.date === T ? 'Today' : fmtShort(t.date)}</span>` : '', t.est ? `<span>${fmtMin(t.est)}</span>` : '', t.subs.length ? `<span>${subsDone}/${t.subs.length} steps</span>` : '', t.repeat ? `<span title="${REPEATS[t.repeat]}">↻ ${REPEATS[t.repeat].replace('Every ', '')}</span>` : '', proj && !o.noProj ? `<span>▸ ${esc(proj.title)}</span>` : '', t.ex ? '<span class="ex">example</span>' : ''].join('');
-  return `<li class="task ${t.done ? 'done' : ''} pri${t.pri || 0}"><button class="chk" data-act="toggle" data-id="${t.id}" aria-label="${t.done ? 'Mark not done' : 'Mark done'}"></button><button class="tmain" data-act="edit" data-id="${t.id}"><span class="ttitle">${o.num ? '' : ''}${esc(t.title)}</span><span class="tmeta">${meta}</span></button>${o.star !== false ? `<button class="star ${t.top ? 'on' : ''}" data-act="star" data-id="${t.id}" aria-label="Top priority" title="Top 3">★</button>` : ''}</li>`;
+  const slot = taskSlot(t);
+  const meta = [slot && !t.done ? `<span title="Scheduled">⏱ ${slot}</span>` : '', catChip(t.cat), secPill(t.sec), od ? `<span class="over">from ${fmtShort(t.date)}</span>` : '', o.date && t.date && !od ? `<span>${t.date === T ? 'Today' : fmtShort(t.date)}</span>` : '', t.est ? `<span>${fmtMin(t.est)}</span>` : '',  t.repeat ? `<span title="${REPEATS[t.repeat]}">↻ ${REPEATS[t.repeat].replace('Every ', '')}</span>` : '', proj && !o.noProj ? `<span>▸ ${esc(proj.title)}</span>` : '', t.ex ? '<span class="ex">example</span>' : ''].join('');
+  const open = UI.openSubs && UI.openSubs[t.id];
+  const subsHtml = open ? `<li class="subs"><ul>${t.subs.map(s => `<li class="task ${s.done ? 'done' : ''}"><button class="chk" data-act="subTick" data-id="${t.id}" data-s="${s.id}" aria-label="Step done"></button><span class="tmain"><span class="ttitle">${esc(s.t)}</span></span><button class="star" data-act="subRm" data-id="${t.id}" data-s="${s.id}" aria-label="Remove step">×</button></li>`).join('')}</ul><input class="in" placeholder="+ Add a step, press Enter" data-enter="subAddInline" data-id="${t.id}" id="sa-${t.id}"></li>` : '';
+  return `<li class="task ${t.done ? 'done' : ''} pri${t.pri || 0}"><button class="chk" data-act="toggle" data-id="${t.id}" aria-label="${t.done ? 'Mark not done' : 'Mark done'}"></button><button class="tmain" data-act="edit" data-id="${t.id}"><span class="ttitle">${o.num ? '' : ''}${esc(t.title)}</span><span class="tmeta">${meta}</span></button>${t.subs.length || o.steps ? `<button class="subtog ${UI.openSubs && UI.openSubs[t.id] ? 'open' : ''}" data-act="subOpen" data-id="${t.id}" aria-expanded="${!!(UI.openSubs && UI.openSubs[t.id])}" title="Steps">${t.subs.length ? `${subsDone}/${t.subs.length}` : '+'}<span class="sr"> steps</span></button>` : ''}${o.star !== false ? `<button class="star ${t.top ? 'on' : ''}" data-act="star" data-id="${t.id}" aria-label="Top priority" title="Top 3">★</button>` : ''}</li>${subsHtml}`;
 }
 const CARD = {
   top3(D) {
@@ -890,12 +934,12 @@ const CARD = {
     const list = sortTasks(tasksOn(D).filter(t => !t.top));
     return `<section class="card" id="card-todo"><div class="chead"><h3>To-do</h3><span class="lab">${tasksOn(D).filter(t => t.done).length}/${tasksOn(D).length} done</span></div>
       ${od.length ? `<div class="carry"><div class="chead"><span class="over">${od.length} carried over</span><button class="link" data-act="moveAll">Move all to today</button></div><ul class="tasks">${od.map(t => taskRow(t)).join('')}</ul></div>` : ''}
-      <ul class="tasks">${list.map(t => taskRow(t)).join('') || (od.length ? '' : '<li class="empty">Nothing here yet.</li>')}</ul>
+      <ul class="tasks">${list.map(t => taskRow(t, { steps: true })).join('') || (od.length ? '' : '<li class="empty">Nothing here yet.</li>')}</ul>
       <div class="addrow"><input class="in" id="todo-add" placeholder="Add a task… try &quot;S3 flashcards 30m #gamsat&quot;" data-enter="addTodo"><button class="btn sm" data-act="addTodo">Add</button></div></section>`;
   },
   schedule(D) {
     const ev = day(D).events || [];
-    return `<section class="card" id="card-schedule"><div class="chead"><h3>Time blocks</h3><button class="link" data-act="blockNew" data-date="${D}">+ Block time</button></div>${ev.length ? `<div class="evs">${ev.map(e => `<button class="ev" data-act="evDel" data-id="${e.id}" data-date="${D}" title="All day · tap to remove">${esc(e.t)}</button>`).join('')}</div>` : ''}${timeline(D)}</section>`;
+    return `<section class="card" id="card-schedule"><div class="chead"><h3>Time blocks</h3><div class="row" style="gap:12px"><button class="link" data-act="calDay" data-date="${D}">Drag tasks in</button><button class="link" data-act="blockNew" data-date="${D}">+ Block time</button></div></div>${ev.length ? `<div class="evs">${ev.map(e => `<button class="ev" data-act="evDel" data-id="${e.id}" data-date="${D}" title="All day · tap to remove">${esc(e.t)}</button>`).join('')}</div>` : ''}${timeline(D)}</section>`;
   },
   habits(D) {
     const hs = S.core.habits.filter(h => !h.archived && habitDue(h, D));
@@ -973,7 +1017,7 @@ function vTasks() {
   if (f === 'upcoming') {
     const by = {}; for (const t of sortTasks(list)) (by[t.date] = by[t.date] || []).push(t);
     body = Object.keys(by).sort().map(d => `<div class="field" style="gap:2px"><span class="lab">${fmt(d, { weekday: 'short', day: 'numeric', month: 'short' })} · in ${diffDays(T, d)}d</span><ul class="tasks">${by[d].map(t => taskRow(t)).join('')}</ul></div>`).join('') || '<p class="empty">Nothing scheduled ahead.</p>';
-  } else body = `<ul class="tasks">${(f === 'done' ? list : sortTasks(list)).map(t => taskRow(t, { date: true })).join('') || `<li class="empty">${f === 'overdue' ? 'Nothing overdue. Nice.' : 'Nothing here.'}</li>`}</ul>`;
+  } else body = `<ul class="tasks">${(f === 'done' ? list : sortTasks(list)).map(t => taskRow(t, { date: true, steps: f !== 'done' })).join('') || `<li class="empty">${f === 'overdue' ? 'Nothing overdue. Nice.' : 'Nothing here.'}</li>`}</ul>`;
   const archived = Object.values(S.archive).reduce((a, x) => a + x.list.length, 0);
   return header('Everything on your plate', 'Tasks', `<span><b>${groups.overdue.length}</b> overdue</span><span><b>${groups.today.filter(t => !t.done).length}</b> left today</span><span><b>${groups.upcoming.length}</b> upcoming</span>`,
     `<input class="in" style="width:220px" placeholder="Search tasks" value="${esc(UI.taskQ)}" data-inp="taskQ" id="task-q">`) +
@@ -988,7 +1032,11 @@ function vTasks() {
 function vPlan() {
   const P = UI.planDate, T = today();
   let body, title;
-  if (UI.planMode === 'week') {
+  if (UI.planMode === 'day' || UI.planMode === 'week') {
+    const days = UI.planMode === 'day' ? [P] : Array.from({ length: 7 }, (_, i) => addDays(weekStartOf(P), i));
+    title = UI.planMode === 'day' ? (P === T ? 'Today' : fmt(P, { weekday: 'long', day: 'numeric', month: 'short' })) : `${fmt(days[0], { day: 'numeric', month: 'short' })} – ${fmt(days[6], { day: 'numeric', month: 'short' })}`;
+    body = vCalendar(days);
+  } else if (UI.planMode === 'list') {
     const ws = weekStartOf(P); const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
     title = `${fmt(ws, { day: 'numeric', month: 'short' })} – ${fmt(days[6], { day: 'numeric', month: 'short' })}`;
     body = `<div class="week-wrap"><div class="week">${days.map(d => {
@@ -1012,9 +1060,101 @@ function vPlan() {
         ${ts.slice(0, 3).map(t => { const c = catOf(t.cat); return `<span class="mt ${t.done ? 'dn' : ''}"><span class="dot" style="--h:${c ? c.h : 260}"></span>${esc(t.title)}</span>`; }).join('')}${ts.length > 3 ? `<span class="mt">+${ts.length - 3} more</span>` : ''}
         <span class="dots">${ts.slice(0, 6).map(t => { const c = catOf(t.cat); return `<span class="dot" style="--h:${c ? c.h : 260};width:6px;height:6px"></span>`; }).join('')}</span></button>`; }).join('')}</div>`;
   }
-  return header('Plan it once, it lands on the day', title, '', `<div class="chip-row"><button class="fchip ${UI.planMode === 'week' ? 'on' : ''}" data-act="pm" data-m="week">Week</button><button class="fchip ${UI.planMode === 'month' ? 'on' : ''}" data-act="pm" data-m="month">Month</button></div>${dateNav('planNav', UI.planMode === 'week' ? 'This week' : 'This month')}<button class="btn soft sm" data-act="impOpen">Plan my week</button>`) + body +
-    `<p class="small muted">Tap a date to open that day. Recurring blocks (like lectures) are marked ↻ and set up from any block's edit sheet.</p>`;
+  return header('Plan it once, it lands on the day', title, '', `<div class="chip-row">${[['day', 'Day'], ['week', 'Week'], ['list', 'Week list'], ['month', 'Month']].map(([k, l]) => `<button class="fchip ${UI.planMode === k ? 'on' : ''}" data-act="pm" data-m="${k}">${l}</button>`).join('')}</div>${dateNav('planNav', UI.planMode === 'day' ? 'Today' : UI.planMode === 'month' ? 'This month' : 'This week')}<button class="btn soft sm" data-act="impOpen">Plan my week</button>`) + body +
+    (UI.planMode === 'list' || UI.planMode === 'month' ? `<p class="small muted">Tap a date to open that day. Repeating blocks (like lectures) are marked ↻.</p>` : '');
 }
+
+/* ============================== calendar (day / week time grid) ============================== */
+const CAL_PX = 48;
+function calRange(days) {
+  const st = S.core.settings; let a = st.dayStart, b = st.dayEnd;
+  for (const d of days) for (const x of blocksOn(d)) { a = Math.min(a, Math.floor(toMin(x.s) / 60)); b = Math.max(b, Math.ceil(toMin(x.e) / 60)); }
+  return [a, Math.max(b, a + 4)];
+}
+function scheduledMap(dates) { const m = new Map(); for (const d of dates) for (const b of (day(d).blocks || [])) if (b.taskId) m.set(b.taskId, { date: d, s: b.s }); return m; }
+function taskSlot(t) { if (!t.date) return null; const b = (day(t.date).blocks || []).find(x => x.taskId === t.id); return b ? b.s : null; }
+function vCalendar(days) {
+  const T = today(); const [a, b] = calRange(days); const H = (b - a) * CAL_PX;
+  const sched = scheduledMap(days);
+  const tf = UI.trayF || 'range';
+  const inRange = t => t.date && t.date >= days[0] && t.date <= days[days.length - 1];
+  const tray = sortTasks(S.tasks.list.filter(t => !t.done && !sched.has(t.id) && (tf === 'range' ? inRange(t) || (t.date && t.date < T && days.includes(T)) : tf === 'overdue' ? t.date && t.date < T : !t.date)));
+  const counts = { range: S.tasks.list.filter(t => !t.done && !sched.has(t.id) && inRange(t)).length, overdue: overdue().length, nodate: S.tasks.list.filter(t => !t.done && !t.date).length };
+  const nm = new Date().getHours() * 60 + new Date().getMinutes();
+  const col = d => {
+    const bl = blocksOn(d);
+    const lanes = []; const place = bl.map(x => { const s = toMin(x.s); let l = lanes.findIndex(end => end <= s); if (l < 0) { l = lanes.length; lanes.push(0); } lanes[l] = toMin(x.e); return l; }); const nl = Math.max(1, lanes.length);
+    return `<div class="cal-col ${d === T ? 'today' : ''}" data-act="slot" data-date="${d}" data-a="${a}" style="height:${H}px">${bl.map((x, i) => { const c = catOf(x.cat); const s = toMin(x.s), e = Math.max(toMin(x.e), s + 15); const tk = x.taskId && S.tasks.list.find(t => t.id === x.taskId);
+      return `<div class="cblk ${x.rec ? 'rec' : ''} ${tk && tk.done ? 'done' : ''}" style="--h:${c ? c.h : 260};top:${(s - a * 60) / 60 * CAL_PX + 1}px;height:${Math.max(18, (e - s) / 60 * CAL_PX - 2)}px;left:calc(${place[i] * (100 / nl)}% + 2px);width:calc(${100 / nl}% - 4px)" ${x.rec ? '' : `data-drag="block" data-dur="${e - s}"`} data-act="blockEdit" data-id="${x.id}" data-date="${d}" data-rec="${x.rec ? 1 : ''}" title="${esc(x.t)} · ${x.s}–${x.e}${x.rec ? ' · repeats weekly' : ' · drag to move'}">${tk ? `<span class="cchk ${tk.done ? 'on' : ''}" data-act="calToggle" data-id="${tk.id}" role="checkbox" aria-checked="${tk.done}" aria-label="Done"></span>` : ''}<b>${esc(x.t)}</b><small>${x.s}–${x.e}</small>${x.rec ? '' : '<i class="rsz" aria-hidden="true"></i>'}</div>`; }).join('')}
+      ${d === T && nm >= a * 60 && nm <= b * 60 ? `<div class="nowl" style="top:${(nm - a * 60) / 60 * CAL_PX}px"></div>` : ''}</div>`;
+  };
+  const picked = UI.pick ? S.tasks.list.find(t => t.id === UI.pick) : null;
+  return `<div class="cal-wrap">
+    <aside class="tray"><div class="chead"><b>To schedule</b><span class="small muted">${tray.length}</span></div>
+      <div class="chip-row">${[['range', days.length === 1 ? 'This day' : 'This week'], ['overdue', 'Overdue'], ['nodate', 'No date']].map(([k, l]) => `<button class="fchip ${tf === k ? 'on' : ''}" data-act="trayF" data-v="${k}">${l}<span class="n">${counts[k]}</span></button>`).join('')}</div>
+      <div class="tchips">${tray.map(t => { const c = catOf(t.cat); return `<button class="tchip ${UI.pick === t.id ? 'picked' : ''}" style="--h:${c ? c.h : 260}" data-drag="task" data-id="${t.id}" data-dur="${t.est || 60}" data-act="pick" title="Drag onto the calendar">${secPill(t.sec)} ${esc(t.title)}<small>${t.date && t.date < T ? `<span class="over">from ${fmtShort(t.date)}</span> · ` : t.date && days.length > 1 ? fmt(t.date, { weekday: 'short' }) + ' · ' : ''}${fmtMin(t.est || 60)}</small></button>`; }).join('') || `<p class="empty small">Nothing left to schedule${tf === 'range' ? ' here' : ''}.</p>`}</div>
+      <p class="small muted">${picked ? `<b>Now tap a time</b> on the calendar to place “${esc(picked.title.slice(0, 40))}”. <button class="link" data-act="pick" data-id="${picked.id}">Cancel</button>` : 'Drag a task onto a time. On a phone: tap a task, then tap a time. Tap an empty slot to add a block.'}</p></aside>
+    <div class="cal" id="cal"><div class="cal-grid" style="--cols:${days.length};--minc:${days.length === 1 ? 200 : 84}px">
+      <div class="cal-h gut"></div>${days.map(d => `<button class="cal-h ${d === T ? 'today' : ''}" data-act="openDay" data-date="${d}"><b>${pd(d).getDate()}</b> <span class="lab">${DOW[wd(d)]}</span>${(day(d).events || []).map(e => `<span class="ev" style="display:block;margin-top:3px">${esc(e.t)}</span>`).join('')}${S.core.projects.filter(p => p.due === d && !p.done).map(p => `<span class="due" style="display:block">Due: ${esc(p.title)}</span>`).join('')}</button>`).join('')}
+      <div class="gut" style="height:${H}px">${Array.from({ length: b - a + 1 }, (_, i) => `<span style="top:${i * CAL_PX}px">${pad(a + i)}:00</span>`).join('')}</div>${days.map(col).join('')}
+    </div></div></div>`;
+}
+function scheduleTask(id, date, min) {
+  const t = S.tasks.list.find(x => x.id === id); if (!t) return;
+  const dur = t.est || 60; const s = Math.max(0, Math.min(min, 24 * 60 - 15));
+  for (const d of [t.date, date]) if (d) { const dd = day(d); if (dd.blocks && dd.blocks.some(b => b.taskId === id)) { dd.blocks = dd.blocks.filter(b => b.taskId !== id); touch(dayKey(d)); } }
+  const dd = day(date, true); (dd.blocks = dd.blocks || []).push({ id: uid(), s: toTime(s), e: toTime(Math.min(s + dur, 23 * 60 + 59)), t: t.title, cat: t.cat, taskId: t.id });
+  if (t.date !== date) { t.date = date; touch('tasks'); }
+  UI.pick = null; touch(dayKey(date)); render(); toast(`Scheduled ${toTime(s)} ${date === today() ? 'today' : fmt(date, { weekday: 'short', day: 'numeric' })}`);
+}
+function moveBlock(fromDate, id, toDate, startMin, endMin) {
+  const src = day(fromDate, true); const b = (src.blocks || []).find(x => x.id === id); if (!b) return;
+  const snap = [[dayKey(fromDate), clone(S.months[mkey(fromDate)])], [dayKey(toDate), clone(S.months[mkey(toDate)] || { _u: 0, days: {} })], ['tasks', clone(S.tasks)]];
+  src.blocks = src.blocks.filter(x => x.id !== id); touch(dayKey(fromDate));
+  b.s = toTime(startMin); b.e = toTime(Math.min(endMin, 23 * 60 + 59));
+  const dst = day(toDate, true); (dst.blocks = dst.blocks || []).push(b); touch(dayKey(toDate));
+  if (b.taskId) { const t = S.tasks.list.find(x => x.id === b.taskId); if (t && t.date !== toDate) { t.date = toDate; touch('tasks'); } }
+  render(); toast(`${b.t}: ${b.s}–${b.e}`, () => { for (const [k, v] of snap) setDoc(k, v); commit(...snap.map(x => x[0])); });
+}
+/* mouse drag: tray task -> calendar, block -> new time/day, block bottom edge -> resize */
+let DR = null, suppressClick = false;
+function calSlotAt(x, y) {
+  const el = document.elementFromPoint(x, y); const c = el && el.closest('.cal-col'); if (!c) return null;
+  const r = c.getBoundingClientRect(); const a = +c.dataset.a;
+  return { col: c, date: c.dataset.date, min: a * 60 + (y - r.top) / CAL_PX * 60 };
+}
+const snap15 = m => Math.round(m / 15) * 15;
+document.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'mouse' || e.button !== 0) return;
+  const it = e.target.closest('[data-drag]'); if (!it) return;
+  DR = { it, x: e.clientX, y: e.clientY, started: false, kind: it.dataset.drag, id: it.dataset.id, date: it.dataset.date, dur: +it.dataset.dur || 60, resize: !!e.target.closest('.rsz') };
+  if (DR.kind === 'block') { const s = calSlotAt(e.clientX, e.clientY); const b = (day(DR.date).blocks || []).find(x => x.id === DR.id); DR.start = b ? toMin(b.s) : 0; DR.grab = s ? s.min - DR.start : 0; }
+});
+document.addEventListener('pointermove', e => {
+  if (!DR) return;
+  if (!DR.started) { if (Math.hypot(e.clientX - DR.x, e.clientY - DR.y) < 5) return; DR.started = true; document.body.classList.add('dragging');
+    if (!DR.resize) { DR.ghost = document.createElement('div'); DR.ghost.className = 'ghost'; DR.ghost.textContent = DR.it.querySelector('b') ? DR.it.querySelector('b').textContent : DR.it.textContent.trim().slice(0, 40); document.body.appendChild(DR.ghost); }
+    DR.it.classList.add('lifting'); }
+  if (DR.ghost) { DR.ghost.style.left = e.clientX + 12 + 'px'; DR.ghost.style.top = e.clientY + 8 + 'px'; }
+  const s = calSlotAt(e.clientX, e.clientY);
+  if (DR.prev && (!s || DR.prev.parentElement !== s.col)) { DR.prev.remove(); DR.prev = null; }
+  if (!s) { DR.target = null; return; }
+  let st, en;
+  if (DR.resize) { if (s.date !== DR.date) return; st = DR.start; en = Math.max(st + 15, snap15(s.min)); }
+  else { st = snap15(s.min - (DR.kind === 'block' ? DR.grab : 0)); en = st + DR.dur; }
+  DR.target = { date: s.date, st, en };
+  if (!DR.prev) { DR.prev = document.createElement('div'); DR.prev.className = 'preview'; s.col.appendChild(DR.prev); }
+  const a = +s.col.dataset.a; DR.prev.style.top = (st - a * 60) / 60 * CAL_PX + 'px'; DR.prev.style.height = Math.max(16, (en - st) / 60 * CAL_PX) + 'px'; DR.prev.textContent = `${toTime(st)}–${toTime(en)}`;
+});
+document.addEventListener('pointerup', () => {
+  if (!DR) return; const d = DR; DR = null;
+  document.body.classList.remove('dragging'); if (d.ghost) d.ghost.remove(); if (d.prev) d.prev.remove(); d.it.classList.remove('lifting');
+  if (!d.started) return;
+  suppressClick = true; setTimeout(() => { suppressClick = false; }, 0);
+  if (!d.target) return;
+  if (d.kind === 'task') scheduleTask(d.id, d.target.date, d.target.st);
+  else moveBlock(d.date, d.id, d.target.date, d.target.st, d.target.en);
+});
 
 /* ============================== PROJECTS ============================== */
 function vProjects() {
@@ -1663,9 +1803,9 @@ function taskSheet(id) {
     <div class="field"><span class="lab">Block time for it</span><div class="row"><input type="time" class="in" id="tb-at" style="flex:0 1 130px" value="09:00"><span class="small muted">for ${fmtMin(t.est || 60)} on ${t.date ? fmtShort(t.date) : 'today'}</span><button class="btn sm" data-act="taskBlock" data-id="${id}">Add to schedule</button></div></div>
     <div class="row" style="justify-content:space-between"><button class="btn danger" data-act="taskDel" data-id="${id}">Delete</button><div class="row"><button class="btn" data-act="taskTmr" data-id="${id}">Move to tomorrow</button><button class="btn pri" data-act="close">Done</button></div></div>`);
 }
-function blockSheet(date, id, rec) {
+function blockSheet(date, id, rec, at) {
   const isNew = !id;
-  let b = isNew ? { s: '09:00', e: '10:00', t: '', cat: '' } : rec ? S.core.recBlocks.find(r => r.id === id) : (day(date).blocks || []).find(x => x.id === id);
+  let b = isNew ? { s: at || '09:00', e: toTime(Math.min(toMin(at || '09:00') + 60, 23 * 60 + 59)), t: '', cat: '' } : rec ? S.core.recBlocks.find(r => r.id === id) : (day(date).blocks || []).find(x => x.id === id);
   if (!b) return;
   const recDays = rec ? b.days : [];
   openSheet(sheetHead(isNew ? 'Block time' : rec ? 'Repeating block' : 'Time block') + `
@@ -1814,7 +1954,7 @@ function renderPill() { $('#fpill').innerHTML = F.running || F.left < F.dur * 60
 function toast(msg, undo) {
   const el = document.createElement('div'); el.className = 'toast'; el.innerHTML = `<span>${esc(msg)}</span>${undo ? '<button>Undo</button>' : ''}`;
   if (undo) el.querySelector('button').onclick = () => { undo(); el.remove(); };
-  $('#toasts').appendChild(el); setTimeout(() => el.remove(), undo ? 6000 : 3000);
+  const box = $('#toasts'); while (box.children.length >= 2) box.firstElementChild.remove(); box.appendChild(el); setTimeout(() => el.remove(), undo ? 6000 : 3000);
 }
 function withUndo(msg, keys, fn) {
   const snap = keys.map(k => [k, clone(getDoc(k) || null)]);
@@ -1857,7 +1997,7 @@ const ACT = {
   tf: el => { UI.taskFilter = el.dataset.f; saveUI(); render(); },
   tc: el => { UI.taskCat = el.dataset.c; render(); },
   pm: el => { UI.planMode = el.dataset.m; saveUI(); render(); },
-  planNav: el => { const d = +el.dataset.d; if (d === 0) UI.planDate = today(); else if (UI.planMode === 'week') UI.planDate = addDays(UI.planDate, 7 * d); else { const x = pd(UI.planDate.slice(0, 8) + '01'); x.setMonth(x.getMonth() + d); UI.planDate = ymd(x); } render(); },
+  planNav: el => { const d = +el.dataset.d; if (d === 0) UI.planDate = today(); else if (UI.planMode === 'day') UI.planDate = addDays(UI.planDate, d); else if (UI.planMode !== 'month') UI.planDate = addDays(UI.planDate, 7 * d); else { const x = pd(UI.planDate.slice(0, 8) + '01'); x.setMonth(x.getMonth() + d); UI.planDate = ymd(x); } render(); },
   hm: el => { const d = +el.dataset.d; if (d === 0) UI.habitMonth = mkey(today()); else { const x = pd(UI.habitMonth + '-01'); x.setMonth(x.getMonth() + d); UI.habitMonth = mkey(ymd(x)); } render(); },
   habit: el => toggleHabit(el.dataset.id, el.dataset.date),
   habitNew: () => habitSheet(),
@@ -1935,6 +2075,15 @@ const ACT = {
   goTasks: el => { UI.view = 'tasks'; UI.taskFilter = el.dataset.f; saveUI(); render(); window.scrollTo(0, 0); },
   goContent: () => { UI.view = 'gamsat'; UI.gTab = 'content'; UI.topicView = 'queue'; UI.topicSec = ''; saveUI(); render(); window.scrollTo(0, 0); },
   scrollTo: el => { const c = document.getElementById('card-' + el.dataset.to); if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'start' }); c.animate([{ boxShadow: '0 0 0 3px var(--accent)' }, { boxShadow: '0 0 0 0 transparent' }], { duration: 1200 }); } },
+  calDay: el => { UI.view = 'plan'; UI.planMode = 'day'; UI.planDate = el.dataset.date; saveUI(); render(); window.scrollTo(0, 0); },
+  subOpen: el => { UI.openSubs = UI.openSubs || {}; UI.openSubs[el.dataset.id] = !UI.openSubs[el.dataset.id]; render(); const n = document.getElementById('sa-' + el.dataset.id); if (n && !S.tasks.list.find(t => t.id === el.dataset.id).subs.length) n.focus(); },
+  subTick: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); const s = t.subs.find(x => x.id === el.dataset.s); s.done = !s.done; commit('tasks'); if (s.done && t.subs.every(x => x.done) && !t.done) toast('All steps done. Tick the task off too?', null); },
+  subRm: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); t.subs = t.subs.filter(x => x.id !== el.dataset.s); commit('tasks'); },
+  subAddInline: el => { const v = el.value.trim(); if (!v) return; const t = S.tasks.list.find(x => x.id === el.dataset.id); t.subs.push({ id: uid(), t: v, done: false }); commit('tasks'); const n = document.getElementById('sa-' + t.id); if (n) n.focus(); },
+  trayF: el => { UI.trayF = el.dataset.v; render(); },
+  pick: el => { UI.pick = UI.pick === el.dataset.id ? null : el.dataset.id; render(); },
+  slot: (el, e) => { if (e.target !== el) return; const r = el.getBoundingClientRect(); const min = snap15(+el.dataset.a * 60 + (e.clientY - r.top) / CAL_PX * 60); if (UI.pick) { scheduleTask(UI.pick, el.dataset.date, min); return; } blockSheet(el.dataset.date, null, false, toTime(min)); },
+  calToggle: (el, e) => { e.stopPropagation(); toggleTask(el.dataset.id); },
   gTab: el => { UI.gTab = el.dataset.v; saveUI(); render(); },
   topicView: el => { UI.topicView = el.dataset.v; render(); },
   loadWorkbook: () => loadWorkbook(),
@@ -2059,7 +2208,7 @@ const INP = {
   taskQ: el => { UI.taskQ = el.value; clearTimeout(INP._q); INP._q = setTimeout(() => { const pos = el.selectionStart; render(); const n = $('#task-q'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }, 200); },
 };
 let inpTimers = new WeakMap();
-document.addEventListener('click', e => { const a = e.target.closest('[data-act]'); if (!a) return; if (a.tagName === 'INPUT') return; const fn = ACT[a.dataset.act]; if (fn) { if (a.dataset.act !== 'scrim') e.preventDefault(); fn(a, e); } });
+document.addEventListener('click', e => { if (suppressClick) { e.preventDefault(); e.stopPropagation(); return; } const a = e.target.closest('[data-act]'); if (!a) return; if (a.tagName === 'INPUT') return; const fn = ACT[a.dataset.act]; if (fn) { if (a.dataset.act !== 'scrim') e.preventDefault(); fn(a, e); } });
 document.addEventListener('change', e => { const el = e.target.closest('[data-ch]'); if (el && CH[el.dataset.ch]) CH[el.dataset.ch](el, e); });
 document.addEventListener('input', e => { const el = e.target; if (el.id === 'qa') { qaPreview(); return; } if (el.dataset && el.dataset.inp && INP[el.dataset.inp]) { if (el.dataset.inp === 'taskQ') return INP.taskQ(el); if (el.dataset.auto) autosize(el); clearTimeout(inpTimers.get(el)); inpTimers.set(el, setTimeout(() => INP[el.dataset.inp](el), 400)); } });
 document.addEventListener('keydown', e => {
