@@ -230,6 +230,13 @@ body.dragging,body.dragging *{cursor:grabbing!important;user-select:none}
 .rstat.done::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;border:solid var(--on-accent);border-width:0 2px 2px 0;transform:rotate(45deg)}
 .rlink{color:inherit;text-decoration:none}.rlink:hover{color:var(--accent-ink);text-decoration:underline}
 .done .rlink{text-decoration:line-through}
+.routine{columns:2 380px;column-gap:18px}
+.routine .card{margin-bottom:18px}
+.routine .card.now{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.steps-ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px}
+.steps-ol li{padding-left:4px;line-height:1.45}
+.steps-ol li::marker{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.steps-ol li span{display:block}
 .carry{background:var(--bad-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
 .carry .chead{font-size:13px}
 .carry .task{border-color:color-mix(in oklch,var(--bad) 18%,transparent)}
@@ -458,6 +465,7 @@ const ICON = {
   habits: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 13l4 4L20 5"/><path d="M4 20h16" opacity=".5"/></svg>',
   reflect: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M5 17a3 3 0 013-3h11"/></svg>',
   wellness: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z"/></svg>',
+  routine: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>',
   med: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3h4v6h6v4h-6v8h-4v-8H4V9h6z"/></svg>',
   settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
@@ -845,7 +853,7 @@ function applyLook() {
 
 /* ============================== shell ============================== */
 const NAV = [
-  ['Plan', [['today', 'Today'], ['plan', 'Week & month'], ['tasks', 'Tasks'], ['projects', 'Projects']]],
+  ['Plan', [['routine', 'My routine'], ['today', 'Today'], ['plan', 'Week & month'], ['tasks', 'Tasks'], ['projects', 'Projects']]],
   ['Study', [['gamsat', 'GAMSAT'], ['med', 'Med school']]],
   ['Grow', [['habits', 'Habits'], ['reflect', 'Reflect'], ['wellness', 'Wellness']]],
   ['You', [['settings', 'Customise']]],
@@ -919,7 +927,7 @@ function vToday() {
     ${hs.length ? `<button class="gl ${hDone === hs.length ? 'good' : ''}" data-act="scrollTo" data-to="habits"><b>${hDone}/${hs.length}</b><span>habits</span></button>` : ''}
   </div>`;
   return header(esc(fmtLong(D)) + (isT ? '' : ` · <button class="link" data-act="day" data-d="0">back to today</button>`), title, sub,
-    `${dateNav('day')}<input type="date" class="in" style="width:auto" value="${D}" data-ch="pickDay" aria-label="Pick a date"><button class="btn sm" data-act="go" data-v="settings">Customise</button>`) + glance + planBanner + ex + `<div class="cols">${cards}</div>`;
+    `${dateNav('day')}<input type="date" class="in" style="width:auto" value="${D}" data-ch="pickDay" aria-label="Pick a date"><button class="btn sm soft" data-act="go" data-v="routine">What do I do now?</button>`) + glance + planBanner + ex + `<div class="cols">${cards}</div>`;
 }
 function taskRow(t, o = {}) {
   const T = today(); const od = !t.done && t.date && t.date < T;
@@ -1786,6 +1794,70 @@ function resEditSheet(id) {
     <div class="row" style="justify-content:space-between"><div class="row"><button class="btn danger" data-act="resDel" data-id="${id}">Remove</button><button class="btn danger" data-act="resDelGrp" data-g="${esc(r.group)}">Remove whole group</button></div><button class="btn pri" data-act="resSave" data-id="${id}">Save</button></div>`);
 }
 
+/* ============================== my routine (plain-English guide) ============================== */
+const ROUTINE = [
+  ['start', 'Start here · once', '20 minutes, then never again', [
+    ['Type your exact test dates and key dates once ACER registration opens (Nov).', 'GAMSAT → This week', 'goTab', 'week'],
+    ['Load your syllabus from your Notion workbooks.', 'GAMSAT → Content', 'goTab', 'content'],
+    ['Add your resources: Drive folders, your Mac folder, and the ACER list. Remove groups you won\'t use.', 'GAMSAT → Resources', 'goTab', 'resources'],
+    ['Set your pace dates and diagnostic paces.', 'GAMSAT → Practice', 'goTab', 'practice'],
+    ['Add your uni and placement timetable as repeating blocks (tap a block, pick days).', 'Week calendar', 'goPlan', 'week'],
+    ['Clear the example content and add your own habits.', 'Customise', 'go', 'settings'],
+    ['On your phone: open this page, then Share → Add to Home Screen.', '', '', ''],
+  ]],
+  ['sunday', 'Every Sunday', '30–45 minutes · your Weekly Scaffold', [
+    ['Open the Weekly Scaffold. It walks you through everything below in order.', 'Open Scaffold', 'scaffold', ''],
+    ['Reflect on last week: what went well, what didn\'t, why.', '', '', ''],
+    ['Run your calculator, then type this week\'s S1 / S2 / S3 hours.', '', '', ''],
+    ['Plan my week: import this week from your Game Plan doc.', 'Plan my week', 'impOpen', ''],
+    ['Week calendar: drag everything in “To schedule” onto a time.', 'Week calendar', 'goPlan', 'week'],
+    ['Clear your review queue.', 'Review queue', 'goContent', ''],
+  ]],
+  ['morning', 'Every morning', '5 minutes', [
+    ['Today: sort anything overdue. Move it to today, push it to tomorrow, or delete it.', 'Today', 'go', 'today'],
+    ['Star your Top 3 for the day.', '', '', ''],
+    ['Check today\'s time blocks. Drag anything unplanned onto a time.', 'Day calendar', 'goPlan', 'day'],
+    ['Quick check-in: sleep, mood, energy.', '', '', ''],
+  ]],
+  ['during', 'Starting a GAMSAT session', '30 seconds', [
+    ['Start the Focus timer and pick the section. This is what counts your study hours.', 'Focus timer', 'focus', ''],
+    ['Work from the task. Tick its steps as you go.', '', '', ''],
+  ]],
+  ['after', 'After every GAMSAT session', '5–10 minutes', [
+    ['Tick the task off.', '', '', ''],
+    ['Did questions? Log the drill: questions, correct, minutes.', 'Log a drill', 'drillNew', ''],
+    ['Every wrong or guessed question: “Log a wrong answer” here (20 seconds), then the full write-up in your Notion analysis database.', 'Log a wrong answer', 'mistakeNew', ''],
+    ['Reviewed content? Tick the topic and rate your understanding.', 'Syllabus', 'goTab', 'content'],
+    ['Tick off the resources you used.', 'Resources', 'goTab', 'resources'],
+    ['Wrote an essay? Log it, then add one reusable idea to your ideas bank.', 'Log an essay', 'essayNew', ''],
+  ]],
+  ['night', 'Every night', '5 minutes', [
+    ['Tick your habits.', 'Today', 'go', 'today'],
+    ['Write three lines: a win, what got in the way, something you\'re grateful for.', '', '', ''],
+    ['Leave unfinished tasks. They carry over to tomorrow on their own.', '', '', ''],
+    ['Peek at tomorrow with the → arrow on Today.', '', '', ''],
+  ]],
+  ['spare', 'Got spare time?', '', [
+    ['Open “Spare time?” on Today and do one. Papers saved for mocks are never suggested.', 'Spare time', 'goTab', 'resources'],
+  ]],
+  ['mock', 'After a mock', 'the next 2 days', [
+    ['Do the review tasks it added for you: mark it, then review every wrong or guessed question.', '', '', ''],
+    ['Log your scores.', 'Log a test', 'scoreNew', ''],
+  ]],
+  ['month', 'Once a month', '15 minutes', [
+    ['Check your pace targets. Are you on track for timing?', 'Pace targets', 'goTab', 'practice'],
+    ['Look at your practice-score trend and the mistake types you make most.', 'Mistake log', 'goContent', ''],
+    ['Med school: update your GPA, application deadlines and MMI practice.', 'Med school', 'go', 'med'],
+  ]],
+];
+function vRoutine() {
+  const now = new Date().getHours(), dow = new Date().getDay();
+  const focus = dow === 0 ? 'sunday' : now < 11 ? 'morning' : now >= 19 ? 'night' : 'after';
+  return header('The whole system on one page', 'My routine', '<span>You don\'t need to use every feature. Follow this and the planner keeps you on track.</span>', '') +
+    `<div class="routine">${ROUTINE.map(([k, t, sub, steps]) => `<section class="card flat ${k === focus ? 'now' : ''}" id="rt-${k}"><div class="chead"><h3>${t}</h3>${k === focus ? '<span class="due-chip soon">now</span>' : sub ? `<span class="lab">${sub}</span>` : ''}</div>${k === focus && sub ? `<span class="lab">${sub}</span>` : ''}
+      <ol class="steps-ol">${steps.map(([txt, lbl, act, v]) => `<li><span>${txt}</span>${lbl ? `<button class="link" data-act="${act}" data-v="${v}" data-t="${v}" data-m="${v}">${lbl} →</button>` : ''}</li>`).join('')}</ol></section>`).join('')}</div>`;
+}
+
 /* ============================== weekly Game Plan import ============================== */
 const GD = 'Google Drive';
 const goalFor = ws => { const g = S.core.settings.gamsat; const ss = secGoalSum(ws); if (ss > 0) return ss; return g.weekGoals && g.weekGoals[ws] != null ? g.weekGoals[ws] : g.weekTarget; };
@@ -2086,7 +2158,7 @@ function impCreate() {
   toast(`Added ${nT} tasks and ${nB} time blocks for the week of ${fmtShort(ws)}`);
 }
 
-const VIEWS = { med: vMed, today: vToday, tasks: vTasks, plan: vPlan, projects: vProjects, gamsat: vGamsat, habits: vHabits, reflect: vReflect, wellness: vWellness, settings: vSettings };
+const VIEWS = { routine: vRoutine, med: vMed, today: vToday, tasks: vTasks, plan: vPlan, projects: vProjects, gamsat: vGamsat, habits: vHabits, reflect: vReflect, wellness: vWellness, settings: vSettings };
 
 /* ============================== sheets ============================== */
 let sheetClose = null;
@@ -2197,7 +2269,7 @@ function logStudySheet() {
     <div class="row" style="justify-content:flex-end"><button class="btn pri" data-act="logStudySave">Log it</button></div>`);
 }
 function moreSheet() {
-  openSheet(sheetHead('More') + `<div class="navg">${[['plan', 'Week & month'], ['projects', 'Projects'], ['med', 'Med school'], ['habits', 'Habits'], ['reflect', 'Reflect'], ['wellness', 'Wellness'], ['settings', 'Customise']].map(([v, l]) => `<button class="nav ${UI.view === v ? 'on' : ''}" data-act="go" data-v="${v}">${ICON[v]}${l}</button>`).join('')}<button class="nav" data-act="focus">${ICON.timer}Focus timer</button></div><div class="sync ${syncState}"><i></i><span>${syncLabel()}</span></div>`);
+  openSheet(sheetHead('More') + `<div class="navg">${[['routine', 'My routine'], ['plan', 'Week & month'], ['projects', 'Projects'], ['med', 'Med school'], ['habits', 'Habits'], ['reflect', 'Reflect'], ['wellness', 'Wellness'], ['settings', 'Customise']].map(([v, l]) => `<button class="nav ${UI.view === v ? 'on' : ''}" data-act="go" data-v="${v}">${ICON[v]}${l}</button>`).join('')}<button class="nav" data-act="focus">${ICON.timer}Focus timer</button></div><div class="sync ${syncState}"><i></i><span>${syncLabel()}</span></div>`);
 }
 
 /* ---- quick add + search ---- */
@@ -2434,6 +2506,8 @@ const ACT = {
   resDriveFind: () => resDriveFind(),
   resDriveSel: el => { UI.resDrive.sel[el.dataset.id] = !UI.resDrive.sel[el.dataset.id]; resDriveSheet(); },
   resDriveGo: () => resDriveGo(),
+  goTab: el => { UI.view = 'gamsat'; UI.gTab = el.dataset.v; saveUI(); if ($('#sheet').innerHTML) closeSheet(); else render(); window.scrollTo(0, 0); },
+  goPlan: el => { UI.view = 'plan'; UI.planMode = el.dataset.v; UI.planDate = today(); saveUI(); render(); window.scrollTo(0, 0); },
   gTab: el => { UI.gTab = el.dataset.v; saveUI(); render(); },
   topicView: el => { UI.topicView = el.dataset.v; render(); },
   loadWorkbook: () => loadWorkbook(),
