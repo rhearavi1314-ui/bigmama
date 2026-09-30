@@ -585,7 +585,7 @@ function mergeRemote(docs, initial) {
     else if (initial && (l._u || 0) > (r._u || 0)) dirty.add(key);
   }
   if (initial) { for (const k of allKeys()) if (!seen.has(k) && getDoc(k) && getDoc(k)._u) dirty.add(k); if (dirty.size) schedRemote(300); }
-  if (changed) { normalise(); saveLocal(); if (booted) safeRender(); }
+  if (changed) { normalise(); const dd = booted ? dedupeResources() : 0; saveLocal(); if (booted) safeRender(); if (dd) toast(`Merged ${dd} duplicate resource${dd > 1 ? 's' : ''}`); }
 }
 async function initRemote() {
   try {
@@ -1692,7 +1692,32 @@ function addResources(items, src) {
     const r = { id: uid(), title: cleanTitle(it.title), group: it.group || 'Other', sec: it.sec ?? guessSec(it.group + ' ' + it.title), src, status: 'todo', ...(it.fileId ? { fileId: it.fileId } : {}), ...(it.path ? { path: it.path } : {}), ...(it.url ? { url: it.url } : {}), ...(it.reserved ? { reserved: it.reserved } : {}), ...(it.note ? { note: it.note } : {}) };
     L.push(r); byKey.set(key, r); n++;
   }
-  touch('res'); return { n, u };
+  const d = dedupeResources(); touch('res'); return { n: n - d, u: u + d };
+}
+
+/* merge duplicate resources: files that are ACER papers fold into the ACER list entry; identical titles merge */
+const normT = t => (t || '').toLowerCase().replace(/\.(pdf|docx?)$/, '').replace(/\b(copy|final|v\d+)\b|\(\d+\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+function acerKey(t) {
+  t = normT(t); if (!/acer|gamsat|practice|sample|online|pdf|paper|test/.test(t)) return null;
+  if (/\bdes\b|o neill|oneill/.test(t)) return /prep test 2|test 2/.test(t) ? 'des2' : null;
+  for (const c of ['blue', 'orange', 'green', 'purple', 'pink']) if (new RegExp('\\b' + c + '\\b').test(t)) return c;
+  if (/online/.test(t)) { if (/\b(a|test a|form a)\b/.test(t) || /online a\b/.test(t)) return 'onA'; if (/\b(b|test b|form b)\b/.test(t)) return 'onB'; }
+  if (/\bpdf\b|paper/.test(t)) { if (/\b(a|test a)\b/.test(t)) return 'pdfA'; if (/\b(b|test b)\b/.test(t)) return 'pdfB'; }
+  if (/acer/.test(t)) { if (/sample question/.test(t)) return 'blue'; if (/practice question/.test(t)) return 'orange'; if (/practice test 1\b|test 1\b/.test(t)) return 'green'; if (/practice test 2\b|test 2\b/.test(t)) return 'purple'; if (/practice test 3\b|test 3\b/.test(t)) return 'pink'; }
+  return null;
+}
+const ACER_KEY_OF = { 'ACER sample questions (blue)': 'blue', 'ACER practice questions (orange)': 'orange', 'ACER practice test 1 (green)': 'green', 'ACER practice test 2 (purple)': 'purple', 'ACER practice test 3 (pink)': 'pink', 'ACER PDF practice test A': 'pdfA', 'ACER PDF practice test B': 'pdfB', 'ACER online practice test A': 'onA', 'ACER online practice test B': 'onB', 'Des O\'Neill prep test 2': 'des2' };
+function dedupeResources() {
+  if (!S.res || !S.res.list.length) return 0;
+  const L = S.res.list, rank = { todo: 0, doing: 1, done: 2 };
+  const acer = {}; for (const r of L) if (r.src === 'acer' && ACER_KEY_OF[r.title]) acer[ACER_KEY_OF[r.title]] = r;
+  const drop = new Set();
+  const absorb = (keep, r) => { if ((rank[r.status] || 0) > (rank[keep.status] || 0)) { keep.status = r.status; keep.doneAt = r.doneAt; } if (!keep.fileId && r.fileId) keep.fileId = r.fileId; if (!keep.path && r.path) keep.path = r.path; if (!keep.url && r.url) keep.url = r.url; if (r.note && !keep.note) keep.note = r.note; drop.add(r.id); };
+  for (const r of L) { if (r.src === 'acer' || drop.has(r.id)) continue; const k = acerKey(r.title + ' ' + (/acer/i.test(r.group) ? 'acer' : '')); if (k && acer[k]) absorb(acer[k], r); }
+  const seen = new Map();
+  for (const r of L) { if (drop.has(r.id)) continue; const k = normT(r.title); if (!k) continue; const ex = seen.get(k); if (ex) absorb(ex, r); else seen.set(k, r); }
+  if (drop.size) { S.res.list = L.filter(r => !drop.has(r.id)); touch('res'); }
+  return drop.size;
 }
 function spareTime(k = 3) {
   const T = today(), wk = mondayOf(T), sg = secGoalsFor(wk);
@@ -1708,7 +1733,7 @@ function spareTime(k = 3) {
 }
 function resRow(r) {
   const u = resUrl(r); const st = r.status || 'todo';
-  return `<li class="task ${st === 'done' ? 'done' : ''}"><button class="rstat ${st}" data-act="resCycle" data-id="${r.id}" title="${st === 'todo' ? 'Not started' : st === 'doing' ? 'In progress' : 'Done'} · tap to change" aria-label="Status: ${st}"></button><div class="tmain"><span class="ttitle">${u ? `<a class="rlink" href="${esc(u)}" target="_blank" rel="noopener">${esc(r.title)} <span aria-hidden="true">↗</span></a>` : esc(r.title)}</span><span class="tmeta">${secPill(r.sec)}${r.reserved ? `<span class="due-chip soon" title="Your Game Plan uses this for a mock or check-in">Saved for: ${esc(r.reserved)}</span>` : ''}${r.note ? `<span>${esc(r.note)}</span>` : ''}${r.src === 'icloud' ? '<span>iCloud</span>' : ''}${st === 'done' && r.doneAt ? `<span>done ${fmtShort(r.doneAt)}</span>` : ''}</span></div><button class="star" data-act="resEdit" data-id="${r.id}" aria-label="Edit">⋯</button></li>`;
+  return `<li class="task ${st === 'done' ? 'done' : ''}"><button class="rstat ${st}" data-act="resCycle" data-id="${r.id}" title="${st === 'todo' ? 'Not started' : st === 'doing' ? 'In progress' : 'Done'} · tap to change" aria-label="Status: ${st}"></button><div class="tmain"><span class="ttitle">${u ? `<a class="rlink" href="${esc(u)}" target="_blank" rel="noopener">${esc(r.title)} <span aria-hidden="true">↗</span></a>` : esc(r.title)}</span><span class="tmeta">${secPill(r.sec)}${r.reserved ? `<span class="due-chip soon" title="Your Game Plan uses this for a mock or check-in">Saved for: ${esc(r.reserved)}</span>` : ''}${r.note ? `<span>${esc(r.note)}</span>` : ''}${r.src === 'icloud' ? '<span>iCloud</span>' : r.src === 'acer' && r.path ? `<span title="${esc(r.path)}">file in iCloud</span>` : ''}${st === 'done' && r.doneAt ? `<span>done ${fmtShort(r.doneAt)}</span>` : ''}</span></div><button class="star" data-act="resEdit" data-id="${r.id}" aria-label="Edit">⋯</button></li>`;
 }
 function resourcesTab() {
   const L = S.res.list.filter(r => !r.hidden); const f = UI.resF || { sec: '', st: 'open', q: '' };
@@ -1721,7 +1746,7 @@ function resourcesTab() {
   return `<section class="card flat"><div class="chead"><h3>Spare time? Do one of these</h3><span class="lab">picked for you</span></div>
       <p class="small muted">Chosen from resources you haven't finished, favouring the section you're furthest behind on this week and topics in your review queue. Papers your Game Plan saves for mocks are never suggested.</p>
       <ul class="tasks">${sp.map(resRow).join('') || '<li class="empty">Add your resources below and suggestions will appear here.</li>'}</ul></section>
-    <section class="card flat"><div class="chead"><h3>Resources</h3><span class="lab">${done}/${L.length} done</span></div>
+    <section class="card flat"><div class="chead"><h3>Resources</h3><div class="row" style="gap:12px"><button class="link" data-act="resDedupe">Merge duplicates</button><span class="lab">${done}/${L.length} done</span></div></div>
       <div class="bar"><i style="width:${L.length ? done / L.length * 100 : 0}%"></i></div>
       <div class="stats">${['S1', 'S2', 'S3'].map(s => { const [d, n] = bySec(s); return `<div class="stat"><b>${d}/${n}</b><span class="lab">${s} done</span></div>`; }).join('')}</div>
       <div class="row" style="justify-content:space-between"><div class="chip-row">${[['', 'All'], ['S1', 'S1'], ['S2', 'S2'], ['S3', 'S3']].map(([k, l]) => `<button class="fchip ${f.sec === k ? 'on' : ''}" data-act="resF" data-k="sec" data-v="${k}">${l}</button>`).join('')}</div>
@@ -2492,6 +2517,7 @@ const ACT = {
   mmiNew: () => mmiSheet(), mmiEdit: el => mmiSheet(el.dataset.id),
   mmiSave: el => { const r = $('#mm-r .on'); const m = { date: val('mm-d') || today(), type: val('mm-t'), prompt: val('mm-p').trim(), rating: r ? +r.dataset.v : 0, fix: val('mm-f').trim() }; const id = el.dataset.id; if (id) Object.assign(S.core.mmi.find(x => x.id === id), m); else S.core.mmi.push({ id: uid(), ...m }); touch('core'); closeSheet(); },
   mmiDel: el => { closeSheet(); withUndo('Station deleted', ['core'], () => { S.core.mmi = S.core.mmi.filter(x => x.id !== el.dataset.id); commit('core'); }); },
+  resDedupe: () => { const n = dedupeResources(); render(); toast(n ? `Merged ${n} duplicate${n > 1 ? 's' : ''}` : 'No duplicates found'); },
   goRes: () => { UI.view = 'gamsat'; UI.gTab = 'resources'; saveUI(); render(); window.scrollTo(0, 0); },
   resCycle: el => { const r = S.res.list.find(x => x.id === el.dataset.id); const i = RES_STATUS.indexOf(r.status || 'todo'); r.status = RES_STATUS[(i + 1) % 3]; r.doneAt = r.status === 'done' ? today() : null; commit('res'); if (r.status === 'done') toast(`Done: ${r.title}`); },
   resF: el => { UI.resF = UI.resF || { sec: '', st: 'open', q: '' }; UI.resF[el.dataset.k] = el.dataset.v; render(); },
@@ -2682,7 +2708,7 @@ async function boot() {
   try { const raw = localStorage.getItem(LS); if (raw) { const j = JSON.parse(raw); if (j && j.core) S = { core: j.core, tasks: j.tasks, res: j.res || null, months: j.months || {}, archive: j.archive || {} }; } } catch (e) {}
   try { const u = JSON.parse(localStorage.getItem(LSUI) || '{}'); Object.assign(UI, { view: u.view || 'today', taskFilter: u.taskFilter || 'today', planMode: u.planMode || 'week', gTab: u.gTab || 'week' }); } catch (e) {}
   UI.lastSeen = today();
-  if (S.core) { normalise(); maybeArchive(); booted = true; render(); initRemote(); return; }
+  if (S.core) { normalise(); maybeArchive(); const dd = dedupeResources(); booted = true; render(); if (dd) toast(`Merged ${dd} duplicate resource${dd > 1 ? 's' : ''}`); initRemote(); return; }
   applyLook();
   await initRemote();
   if (S.core) { normalise(); maybeArchive(); booted = true; render(); } else welcome();
