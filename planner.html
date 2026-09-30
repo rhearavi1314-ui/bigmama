@@ -497,6 +497,8 @@ const FONTS = {
 const SECS = { S1: 'Reasoning in Humanities & Social Sciences', S2: 'Written Communication', S3: 'Reasoning in Biological & Physical Sciences' };
 const CARDS = { top3: 'Top 3 priorities', todo: 'To-do list', schedule: 'Time blocks', habits: 'Habits', checkin: 'Check-in', gamsat: 'GAMSAT', projects: 'Projects', reflect: 'Reflection' };
 const REPEATS = { '': 'Does not repeat', daily: 'Every day', weekdays: 'Every weekday', weekly: 'Every week', fortnightly: 'Every 2 weeks', monthly: 'Every month' };
+const parseEvery = r => { const m = /^every:(\d+):(day|week|month)$/.exec(r || ''); return m ? { n: +m[1], u: m[2] } : null; };
+const repLabel = r => { const c = parseEvery(r); return c ? `Every ${c.n === 1 ? '' : c.n + ' '}${c.u}${c.n === 1 ? '' : 's'}` : (REPEATS[r] || ''); };
 const REVIEW_GAP = [0, 1, 4, 14, 30, 30];
 
 const TEMPLATES = {
@@ -620,6 +622,8 @@ function newTask(p) {
   return Object.assign({ id: uid(), title: '', date: null, cat: '', sec: '', pri: 0, est: 0, done: false, doneAt: null, top: false, notes: '', repeat: '', projectId: '', subs: [], created: Date.now() }, p);
 }
 function nextDate(date, rep) {
+  const c = parseEvery(rep);
+  if (c) { if (c.u === 'day') return addDays(date, c.n); if (c.u === 'week') return addDays(date, 7 * c.n); const d = pd(date); const dom = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + c.n); const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); d.setDate(Math.min(dom, last)); return ymd(d); }
   if (rep === 'daily') return addDays(date, 1);
   if (rep === 'weekdays') { let d = addDays(date, 1); while (wd(d) === 0 || wd(d) === 6) d = addDays(d, 1); return d; }
   if (rep === 'weekly') return addDays(date, 7);
@@ -934,7 +938,7 @@ function taskRow(t, o = {}) {
   const subsDone = t.subs.filter(s => s.done).length;
   const proj = t.projectId && S.core.projects.find(p => p.id === t.projectId);
   const slot = taskSlot(t);
-  const meta = [slot && !t.done ? `<span title="Scheduled">⏱ ${slot}</span>` : '', catChip(t.cat), secPill(t.sec), od ? `<span class="over">from ${fmtShort(t.date)}</span>` : '', o.date && t.date && !od ? `<span>${t.date === T ? 'Today' : fmtShort(t.date)}</span>` : '', t.est ? `<span>${fmtMin(t.est)}</span>` : '',  t.repeat ? `<span title="${REPEATS[t.repeat]}">↻ ${REPEATS[t.repeat].replace('Every ', '')}</span>` : '', proj && !o.noProj ? `<span>▸ ${esc(proj.title)}</span>` : '', t.ex ? '<span class="ex">example</span>' : ''].join('');
+  const meta = [slot && !t.done ? `<span title="Scheduled">⏱ ${slot}</span>` : '', catChip(t.cat), secPill(t.sec), od ? `<span class="over">from ${fmtShort(t.date)}</span>` : '', o.date && t.date && !od ? `<span>${t.date === T ? 'Today' : fmtShort(t.date)}</span>` : '', t.est ? `<span>${fmtMin(t.est)}</span>` : '',  t.repeat ? `<span title="${repLabel(t.repeat)}">↻ ${repLabel(t.repeat).replace('Every ', '')}</span>` : '', proj && !o.noProj ? `<span>▸ ${esc(proj.title)}</span>` : '', t.ex ? '<span class="ex">example</span>' : ''].join('');
   const open = UI.openSubs && UI.openSubs[t.id];
   const subsHtml = open ? `<li class="subs"><ul>${t.subs.map(s => `<li class="task ${s.done ? 'done' : ''}"><button class="chk" data-act="subTick" data-id="${t.id}" data-s="${s.id}" aria-label="Step done"></button><span class="tmain"><span class="ttitle">${esc(s.t)}</span></span><button class="star" data-act="subRm" data-id="${t.id}" data-s="${s.id}" aria-label="Remove step">×</button></li>`).join('')}</ul><input class="in" placeholder="+ Add a step, press Enter" data-enter="subAddInline" data-id="${t.id}" id="sa-${t.id}"></li>` : '';
   return `<li class="task ${t.done ? 'done' : ''} pri${t.pri || 0}"><button class="chk" data-act="toggle" data-id="${t.id}" aria-label="${t.done ? 'Mark not done' : 'Mark done'}"></button><button class="tmain" data-act="edit" data-id="${t.id}"><span class="ttitle">${o.num ? '' : ''}${esc(t.title)}</span><span class="tmeta">${meta}</span></button>${t.subs.length || o.steps ? `<button class="subtog ${UI.openSubs && UI.openSubs[t.id] ? 'open' : ''}" data-act="subOpen" data-id="${t.id}" aria-expanded="${!!(UI.openSubs && UI.openSubs[t.id])}" title="Steps">${t.subs.length ? `${subsDone}/${t.subs.length}` : '+'}<span class="sr"> steps</span></button>` : ''}${o.star !== false ? `<button class="star ${t.top ? 'on' : ''}" data-act="star" data-id="${t.id}" aria-label="Top priority" title="Top 3">★</button>` : ''}</li>${subsHtml}`;
@@ -2201,7 +2205,8 @@ function taskSheet(id) {
     <div class="field"><span class="lab">GAMSAT section</span><select class="in" data-ch="tf" data-f="sec" data-id="${id}">${opt({ '': 'None', S1: 'S1 · Humanities', S2: 'S2 · Writing', S3: 'S3 · Sciences' }, t.sec)}</select></div>
     <div class="field"><span class="lab">Priority</span><select class="in" data-ch="tf" data-f="pri" data-id="${id}">${opt({ 0: 'None', 1: 'Low', 2: 'Medium', 3: 'High' }, t.pri || 0)}</select></div>
     <div class="field"><span class="lab">Time estimate (min)</span><input type="number" min="0" step="5" class="in" value="${t.est || ''}" data-ch="tf" data-f="est" data-id="${id}"></div>
-    <div class="field"><span class="lab">Repeat</span><select class="in" data-ch="tf" data-f="repeat" data-id="${id}">${opt(REPEATS, t.repeat || '')}</select></div>
+    <div class="field"><span class="lab">Repeat</span><select class="in" data-ch="tf" data-f="repeat" data-id="${id}">${opt(REPEATS, parseEvery(t.repeat) ? '' : t.repeat || '')}<option value="custom" ${parseEvery(t.repeat) ? 'selected' : ''}>${parseEvery(t.repeat) ? repLabel(t.repeat) : 'Custom…'}</option></select>
+      ${parseEvery(t.repeat) ? `<div class="row small" style="margin-top:6px">Every <input type="number" min="1" max="365" class="in" style="width:70px;padding:4px 8px" value="${parseEvery(t.repeat).n}" data-ch="repN" data-id="${id}" aria-label="Repeat every"><select class="in" style="width:auto;padding:4px 26px 4px 8px" data-ch="repU" data-id="${id}">${['day', 'week', 'month'].map(u => `<option value="${u}" ${parseEvery(t.repeat).u === u ? 'selected' : ''}>${u}s</option>`).join('')}</select></div>` : ''}</div>
     <div class="field" style="grid-column:1/-1"><span class="lab">Project</span><select class="in" data-ch="tf" data-f="projectId" data-id="${id}"><option value="">None</option>${S.core.projects.map(p => `<option value="${p.id}" ${t.projectId === p.id ? 'selected' : ''}>${esc(p.title)}</option>`).join('')}</select></div></div>
     <div class="field"><span class="lab">Break it into steps</span><ul class="tasks" id="subs">${t.subs.map(s => `<li class="task ${s.done ? 'done' : ''}"><button class="chk" data-act="subToggle" data-id="${id}" data-s="${s.id}" aria-label="Step done"></button><span class="tmain"><span class="ttitle">${esc(s.t)}</span></span><button class="star" data-act="subDel" data-id="${id}" data-s="${s.id}" aria-label="Remove step">×</button></li>`).join('')}</ul>
       <div class="addrow"><input class="in" id="sub-add" placeholder="Add a step" data-enter="addSub" data-id="${id}"><button class="btn sm" data-act="addSub" data-id="${id}">Add</button></div></div>
@@ -2625,7 +2630,10 @@ const CH = {
   pickDay: el => { if (el.value) { UI.date = el.value; render(); } },
   sleep: el => { const d = day(UI.date, true); d.sleep = el.value === '' ? undefined : clamp(+el.value, 0, 16); delete d.exW; touch(dayKey(UI.date)); },
   intention: el => { const d = day(UI.date, true); d.intention = el.value; touch(dayKey(UI.date)); },
+  repN: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); const c = parseEvery(t.repeat); t.repeat = `every:${clamp(Math.round(+el.value) || 1, 1, 365)}:${c ? c.u : 'day'}`; touch('tasks'); pendingRender = true; },
+  repU: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); const c = parseEvery(t.repeat); t.repeat = `every:${c ? c.n : 1}:${el.value}`; touch('tasks'); pendingRender = true; },
   tf: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); if (!t) return; const f = el.dataset.f; let v = el.value;
+    if (f === 'repeat' && v === 'custom') { t.repeat = 'every:21:day'; touch('tasks'); taskSheet(t.id); return; }
     if (f === 'pri' || f === 'est') v = +v || 0; if (f === 'date') v = v || null; if (f === 'title' && !v.trim()) return;
     t[f] = v; if (f === 'cat' && gamsatCat() && v !== gamsatCat().id && t.sec) { /* keep section tag */ }
     if (f === 'sec' && v && !t.cat && gamsatCat()) t.cat = gamsatCat().id;
