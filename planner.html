@@ -890,7 +890,7 @@ function renderSide() {
   const od = overdue().length, T = today();
   const rq = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp))).length;
   const hl = S.core.habits.filter(h => !h.archived && habitDue(h, T) && !ticked(h, T) && h.freq.type !== 'times').length;
-  $('#side').innerHTML = `<div class="brand"><i></i><b>Bloom</b></div>
+  $('#side').innerHTML = `<div class="brand"><i></i><b>squirt</b></div>
     <button class="btn pri" data-act="quick">${ICON.plus} Quick add <kbd style="color:inherit;border-color:currentColor;opacity:.7">${/Mac|iP/.test(navigator.platform) ? '⌘' : 'Ctrl'} K</kbd></button>
     ${NAV.map(([g, items]) => `<div class="navg"><span class="lab">${g}</span>${items.map(([v, l]) => `<button class="nav ${UI.view === v ? 'on' : ''}" data-act="go" data-v="${v}">${ICON[v === 'settings' ? 'settings' : v]}${l}${v === 'tasks' && od ? `<span class="cnt" title="overdue">${od}</span>` : ''}${v === 'gamsat' && rq ? `<span class="cnt acc" title="to re-review">${rq}</span>` : ''}${v === 'habits' && hl ? `<span class="cnt acc" title="habits left today">${hl}</span>` : ''}</button>`).join('')}</div>`).join('')}
     <button class="nav" data-act="focus">${ICON.timer}Focus timer</button>
@@ -2143,7 +2143,7 @@ const ROUTINE = [
 function vRoutine() {
   const now = new Date().getHours(), dow = new Date().getDay();
   const focus = dow === 0 ? 'sunday' : now < 11 ? 'morning' : now >= 19 ? 'night' : 'after';
-  return header('The whole system on one page', 'My routine', '<span>You don\'t need to use every feature. Follow this and the planner keeps you on track.</span>', '') +
+  return header('The whole system on one page', 'My routine', '', '') +
     `<div class="routine">${ROUTINE.map(([k, t, sub, steps]) => `<section class="card flat ${k === focus ? 'now' : ''}" id="rt-${k}"><div class="chead"><h3>${t}</h3>${k === focus ? '<span class="due-chip soon">now</span>' : sub ? `<span class="lab">${sub}</span>` : ''}</div>${k === focus && sub ? `<span class="lab">${sub}</span>` : ''}
       <ol class="steps-ol">${steps.map(([txt, lbl, act, v]) => `<li><span>${txt}</span>${lbl ? `<button class="link" data-act="${act}" data-v="${v}" data-t="${v}" data-m="${v}">${lbl} →</button>` : ''}</li>`).join('')}</ol></section>`).join('')}</div>`;
 }
