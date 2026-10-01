@@ -981,8 +981,9 @@ const CARD = {
     const od = isT ? sortTasks(overdue()) : [];
     const list = sortTasks(tasksOn(D).filter(t => !t.top));
     return `<section class="card" id="card-todo"><div class="chead"><h3>To-do</h3><span class="lab">${tasksOn(D).filter(t => t.done).length}/${tasksOn(D).length} done</span></div>
+      ${(() => { const ed = isT ? errDue(T) : []; return ed.length ? `<div class="field" style="gap:2px"><span class="lab">Retries &amp; drills due · ${ed.length}</span><ul class="tasks">${ed.map(errItem).join('')}</ul></div>` : ''; })()}
       ${od.length ? `<div class="carry"><div class="chead"><span class="over">${od.length} carried over</span><button class="link" data-act="moveAll">Move all to today</button></div><ul class="tasks">${od.map(t => taskRow(t)).join('')}</ul></div>` : ''}
-      <ul class="tasks">${list.map(t => taskRow(t, { steps: true })).join('') || (od.length ? '' : '<li class="empty">Nothing here yet.</li>')}</ul>
+      <ul class="tasks">${list.map(t => taskRow(t, { steps: true })).join('') || (od.length || (isT && errDue(T).length) ? '' : '<li class="empty">Nothing here yet.</li>')}</ul>
       <div class="addrow"><input class="in" id="todo-add" placeholder="Add a task… try &quot;S3 flashcards 30m #gamsat&quot;" data-enter="addTodo"><button class="btn sm" data-act="addTodo">Add</button></div></section>`;
   },
   schedule(D) {
@@ -1269,6 +1270,7 @@ function vGamsat() {
       <section class="card flat"><div class="chead"><h3>Study to-dos</h3><span class="lab">${td.filter(t => t.done).length}/${td.length} today</span></div>
         ${od.length ? `<div class="carry"><div class="chead"><span class="over">${od.length} overdue</span><button class="link" data-act="moveAllG">Move to today</button></div><ul class="tasks">${od.map(t => taskRow(t)).join('')}</ul></div>` : ''}
         <ul class="tasks">${td.map(t => taskRow(t)).join('') || '<li class="empty">Nothing set for today.</li>'}</ul>
+        ${(() => { const ed = errDue(addDays(T, 7)); const now = ed.filter(x => x.due <= T), soon = ed.filter(x => x.due > T); return ed.length ? `<span class="lab">Retries &amp; drills${now.length ? ` · ${now.length} due` : ''}</span><ul class="tasks">${now.map(errItem).join('')}${soon.map(errItem).join('')}</ul>` : ''; })()}
         ${up.length ? `<span class="lab">Next 7 days</span><ul class="tasks">${up.map(t => taskRow(t, { date: true })).join('')}</ul>` : ''}
         ${(() => { const nd = sortTasks(gts.filter(t => !t.done && !t.date)); return nd.length ? `<span class="lab">No day set yet · ${nd.length}</span><ul class="tasks">${nd.map(t => taskRow(t)).join('')}</ul><p class="small muted">Give one a date in its sheet, or drag it onto the calendar (Week & month → “No date”).</p>` : ''; })()}
         <div class="addrow"><select class="in" id="g-sec" style="flex:0 0 76px"><option>S1</option><option>S2</option><option selected>S3</option><option value="">Any</option></select><input class="in" id="g-add" placeholder="e.g. Buffers practice set tomorrow 45m" data-enter="addG"><button class="btn sm" data-act="addG">Add</button></div></section>
@@ -1893,16 +1895,20 @@ function errDue(until) {
 const qLabel = m => esc([m.src, m.q ? `Q${m.q}` : ''].filter(Boolean).join(' ') || `from ${fmtShort(m.date)}`);
 const mSubject = m => { const tp = S.core.topics.find(x => x.id === m.topicId); return [(m.stems || []).join(', '), tp ? tp.name : m.subj || m.stim || ''].filter(Boolean).join(' · '); };
 const mWrong = m => m.note || mReasons(m).map(r => REASONS[r] || r).join(', ');
-function errorCard() {
-  const T = today(), sec = UI.errSec ?? 'S3', v = UI.errView || 'due', inSec = x => !sec || x.sec === sec;
+function errItem(it) {
+  const T = today();
   const dueChip = d => `<span class="due-chip ${d < T ? 'soon' : ''}">${d < T ? `${diffDays(d, T)}d late` : d === T ? 'due today' : `due ${fmtShort(d)}`}</span>`;
-  const item = it => {
+  return (it => {
     if (it.t === 'sess') { const sd = it.x, n = S.core.mistakes.filter(m => m.drillId === sd.id).length;
       return `<li class="task"><button class="tmain" data-act="sdEdit" data-id="${sd.id}"><span class="ttitle">${secPill(sd.sec)} Drill: ${esc(sd.skill)}</span><span class="tmeta"><span>Session ${it.i + 1} of 4</span>${sd.act ? `<span>${esc(sd.act)}</span>` : ''}${n ? `<span>from ${n} Q${n > 1 ? 's' : ''}</span>` : ''}${dueChip(it.due)}</span></button><button class="btn sm" data-act="sdDone" data-id="${sd.id}" data-i="${it.i}">Done</button></li>`; }
     const m = it.x, sd = sdOf(m);
     if (it.t === 'extra') return `<li class="task"><button class="tmain" data-act="mistakeEdit" data-id="${m.id}"><span class="ttitle">${secPill(m.sec)} Extra drill: ${esc(sd ? sd.skill : '')}</span><span class="tmeta"><span>${qLabel(m)} was wrong on retry ${it.k}</span>${sd && sd.act ? `<span>${esc(sd.act)}</span>` : ''}${dueChip(it.due)}</span></button><button class="btn sm" data-act="errExtra" data-id="${m.id}">Done</button></li>`;
     return `<li class="task"><button class="tmain" data-act="mistakeEdit" data-id="${m.id}"><span class="ttitle">${secPill(m.sec)} Retry ${it.k + 1}: ${qLabel(m)}</span><span class="tmeta">${mSubject(m) ? `<span>${esc(mSubject(m))}</span>` : ''}<span>${esc(mWrong(m).slice(0, 70))}</span>${dueChip(it.due)}</span></button><span class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn sm" data-act="errRetry" data-id="${m.id}" data-ok="1" title="Got it right">✓ Right</button><button class="btn sm" data-act="errRetry" data-id="${m.id}" data-ok="0" title="Got it wrong">✗ Wrong</button></span></li>`;
-  };
+  })(it);
+}
+function errorCard() {
+  const T = today(), sec = UI.errSec ?? 'S3', v = UI.errView || 'due', inSec = x => !sec || x.sec === sec;
+  const item = errItem;
   const due = errDue(addDays(T, 7)).filter(it => inSec(it.x)), now = due.filter(it => it.due <= T), soon = due.filter(it => it.due > T);
   const toAn = S.core.mistakes.filter(m => !m.ex && inSec(m) && mNext(m).kind === 'analyse');
   let body = '';
