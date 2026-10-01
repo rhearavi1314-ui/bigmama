@@ -2002,7 +2002,7 @@ function patternsCard() {
 /* ============================== Todoist bridge ==============================
    "Send to Todoist" adds a task with the same day + time as its block here. The planner stays in charge of scheduling:
    ticks sync both ways (Todoist → planner when you open the planner), date/time changes here are pushed to Todoist. */
-const TDS = 'Todoist', TD_LABEL = 'GAMSAT';
+const TDS = 'Todoist';
 const TDX = { busy: false, pulled: 0, timer: null };
 async function tdCall(tool, input) {
   const mcp = window.claude && window.claude.use ? await window.claude.use('mcp') : null;
@@ -2023,17 +2023,29 @@ function tdErr(e) {
 }
 const tdBlock = t => t.date ? (day(t.date).blocks || []).find(x => x.taskId === t.id) : null;
 const tdWhen = t => { const b = tdBlock(t); return t.date ? (b ? `${t.date}T${b.s}:00` : t.date) : ''; };
+/* your existing GAMSAT project in Todoist (found by name, remembered); Inbox if there isn't one */
+async function tdProject() {
+  const st = S.core.settings; if (st.tdProject) return st.tdProject;
+  const p = await tdCall('find-projects', { searchText: 'gamsat' });
+  const list = []; const walk = x => { if (!x || typeof x !== 'object') return; if (Array.isArray(x)) { for (const y of x) { if (y && y.id && y.name) list.push(y); else walk(y); } return; } for (const v of Object.values(x)) walk(v); }; walk(p);
+  const hit = list.find(x => /gamsat/i.test(x.name) && !x.isArchived);
+  if (hit) { st.tdProject = { id: String(hit.id), name: hit.name }; touch('core'); return st.tdProject; }
+  return null;
+}
 async function tdSend(id) {
   const t = S.tasks.list.find(x => x.id === id); if (!t || t.td || TDX.busy) return; if (!t.date) { toast('Give it a date first'); return; }
   const b = tdBlock(t), mins = b ? toMin(b.e) - toMin(b.s) : 0;
-  const task = { content: t.title, dueString: b ? `${t.date} ${b.s}` : t.date, labels: [TD_LABEL], priority: ['p4', 'p3', 'p2', 'p1'][t.pri || 0], description: 'From your GAMSAT planner. Tick it here or there.' };
+  const task = { content: t.title, dueString: b ? `${t.date} ${b.s}` : t.date, priority: ['p4', 'p3', 'p2', 'p1'][t.pri || 0], description: 'From your GAMSAT planner. Tick it here or there.' };
   if (mins > 0) task.duration = `${mins}m`;
   TDX.busy = true; taskSheet(id);
   try {
-    const p = await tdCall('add-tasks', { tasks: [task] });
+    let proj = null; try { proj = await tdProject(); } catch (e) { if (e && e.code !== 'tool_error') throw e; }
+    task.projectId = proj ? proj.id : 'inbox';
+    let p; try { p = await tdCall('add-tasks', { tasks: [task] }); }
+    catch (e) { if (proj && e && e.code === 'tool_error') { S.core.settings.tdProject = null; proj = await tdProject(); task.projectId = proj ? proj.id : 'inbox'; p = await tdCall('add-tasks', { tasks: [task] }); } else throw e; }
     const hit = tdItems(p).find(x => x.content === t.title) || tdItems(p)[0];
     if (!hit) throw { code: 'tool_error', message: 'it didn\'t confirm the new task' };
-    t.td = { id: String(hit.id), at: tdWhen(t), done: false }; touch('tasks'); toast(b ? `In Todoist for ${fmtShort(t.date)} at ${b.s}` : `In Todoist for ${fmtShort(t.date)} (no time set)`);
+    t.td = { id: String(hit.id), at: tdWhen(t), done: false }; touch('tasks'); toast(`${b ? `In Todoist for ${fmtShort(t.date)} at ${b.s}` : `In Todoist for ${fmtShort(t.date)} (no time set)`} · ${proj ? proj.name : 'Inbox'}`);
   } catch (e) { toast(tdErr(e)); }
   TDX.busy = false; if ($('#sheet').innerHTML) taskSheet(id); render();
 }
