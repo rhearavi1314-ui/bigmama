@@ -554,6 +554,7 @@ let localTimer;
 function saveLocal() { clearTimeout(localTimer); localTimer = setTimeout(() => { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} }, 250); }
 function saveUI() { try { localStorage.setItem(LSUI, JSON.stringify({ view: UI.view, taskFilter: UI.taskFilter, planMode: UI.planMode, gTab: UI.gTab })); } catch (e) {} }
 function touch(...keys) {
+  if (typeof tdSoon === 'function' && S.tasks && S.tasks.list.some(t => t.td)) tdSoon();
   const now = Date.now();
   for (const k of keys) { const d = getDoc(k); if (!d) continue; d._u = now; dirty.add(k); }
   saveLocal(); schedRemote();
@@ -962,7 +963,7 @@ function taskRow(t, o = {}) {
   const subsDone = t.subs.filter(s => s.done).length;
   const proj = t.projectId && S.core.projects.find(p => p.id === t.projectId);
   const slot = taskSlot(t);
-  const meta = [slot && !t.done ? `<span title="Scheduled">⏱ ${slot}</span>` : '', catChip(t.cat), secPill(t.sec), od ? `<span class="over">${t.date ? `from ${fmtShort(t.date)}` : `was due ${fmtShort(t.due)}`}</span>` : '', t.due && !t.done && !(od && !t.date) ? `<span class="${t.date && t.date > t.due ? 'over' : ''}" title="Due by">due ${t.due === T ? 'today' : fmtShort(t.due)}</span>` : '', o.date && t.date && !od ? `<span>${t.date === T ? 'Today' : fmtShort(t.date)}</span>` : '', t.est ? `<span>${fmtMin(t.est)}</span>` : '',  t.repeat ? `<span title="${repLabel(t.repeat)}">↻ ${repLabel(t.repeat).replace('Every ', '')}</span>` : '', proj && !o.noProj ? `<span>▸ ${esc(proj.title)}</span>` : '', t.ex ? '<span class="ex">example</span>' : ''].join('');
+  const meta = [slot && !t.done ? `<span title="Scheduled">⏱ ${slot}</span>` : '', t.td ? '<span title="Also in Todoist">↗ Todoist</span>' : '', catChip(t.cat), secPill(t.sec), od ? `<span class="over">${t.date ? `from ${fmtShort(t.date)}` : `was due ${fmtShort(t.due)}`}</span>` : '', t.due && !t.done && !(od && !t.date) ? `<span class="${t.date && t.date > t.due ? 'over' : ''}" title="Due by">due ${t.due === T ? 'today' : fmtShort(t.due)}</span>` : '', o.date && t.date && !od ? `<span>${t.date === T ? 'Today' : fmtShort(t.date)}</span>` : '', t.est ? `<span>${fmtMin(t.est)}</span>` : '',  t.repeat ? `<span title="${repLabel(t.repeat)}">↻ ${repLabel(t.repeat).replace('Every ', '')}</span>` : '', proj && !o.noProj ? `<span>▸ ${esc(proj.title)}</span>` : '', t.ex ? '<span class="ex">example</span>' : ''].join('');
   const open = UI.openSubs && UI.openSubs[t.id];
   const subsHtml = open ? `<li class="subs"><ul>${t.subs.map(s => `<li class="task ${s.done ? 'done' : ''}"><button class="chk" data-act="subTick" data-id="${t.id}" data-s="${s.id}" aria-label="Step done"></button><span class="tmain"><span class="ttitle">${esc(s.t)}</span></span><button class="star" data-act="subRm" data-id="${t.id}" data-s="${s.id}" aria-label="Remove step">×</button></li>`).join('')}</ul><input class="in" placeholder="+ Add a step, press Enter" data-enter="subAddInline" data-id="${t.id}" id="sa-${t.id}"></li>` : '';
   return `<li class="task ${t.done ? 'done' : ''} pri${t.pri || 0}"><button class="chk" data-act="toggle" data-id="${t.id}" aria-label="${t.done ? 'Mark not done' : 'Mark done'}"></button><button class="tmain" data-act="edit" data-id="${t.id}"><span class="ttitle">${o.num ? '' : ''}${esc(t.title)}</span><span class="tmeta">${meta}</span></button>${t.subs.length || o.steps ? `<button class="subtog ${UI.openSubs && UI.openSubs[t.id] ? 'open' : ''}" data-act="subOpen" data-id="${t.id}" aria-expanded="${!!(UI.openSubs && UI.openSubs[t.id])}" title="Steps">${t.subs.length ? `${subsDone}/${t.subs.length}` : '+'}<span class="sr"> steps</span></button>` : ''}${o.star !== false ? `<button class="star ${t.top ? 'on' : ''}" data-act="star" data-id="${t.id}" aria-label="Top priority" title="Top 3">★</button>` : ''}</li>${subsHtml}`;
@@ -1998,6 +1999,82 @@ function patternsCard() {
     <div class="pgrid">${out.join('')}</div></section>`;
 }
 
+/* ============================== Todoist bridge ==============================
+   "Send to Todoist" adds a task with the same day + time as its block here. The planner stays in charge of scheduling:
+   ticks sync both ways (Todoist → planner when you open the planner), date/time changes here are pushed to Todoist. */
+const TDS = 'Todoist', TD_LABEL = 'GAMSAT';
+const TDX = { busy: false, pulled: 0, timer: null };
+async function tdCall(tool, input) {
+  const mcp = window.claude && window.claude.use ? await window.claude.use('mcp') : null;
+  if (!mcp) throw { code: 'not_granted' };
+  const res = await mcp.callTool(TDS, tool, input, { cache: false });
+  let p = res && res.payload !== undefined ? res.payload : res;
+  if (typeof p === 'string') { try { p = JSON.parse(p); } catch (e) {} }
+  return p;
+}
+function tdItems(p) { const out = []; const walk = x => { if (!x || typeof x !== 'object') return; if (Array.isArray(x)) { for (const y of x) { if (y && typeof y === 'object' && y.id && 'content' in y) out.push(y); else walk(y); } return; } for (const v of Object.values(x)) walk(v); }; walk(p); return out; }
+function tdErr(e) {
+  const c = e && e.code;
+  return { server_not_connected: 'Todoist isn\'t connected. Add it in claude.ai Settings → Connectors.', needs_reauth: 'Todoist needs reconnecting in claude.ai Settings → Connectors.',
+    selection_required: 'You have more than one Todoist connected. Choose one when Claude asks, then try again.', not_in_manifest: 'Todoist is switched off for this planner. Allow it in the page\'s permissions to use this.',
+    blocked_by_policy: 'Your organisation blocks Todoist here.', server_unavailable: 'Todoist didn\'t answer. Try again in a moment.',
+    not_granted: 'Todoist can\'t be reached from this view. Open the planner on claude.ai.', capability_disabled: 'Todoist can\'t be reached from this view. Open the planner on claude.ai.',
+    tool_error: 'Todoist said: ' + ((e && e.message) || 'that didn\'t work') }[c] || 'Couldn\'t reach Todoist' + (e && e.message ? ': ' + e.message : '.');
+}
+const tdBlock = t => t.date ? (day(t.date).blocks || []).find(x => x.taskId === t.id) : null;
+const tdWhen = t => { const b = tdBlock(t); return t.date ? (b ? `${t.date}T${b.s}:00` : t.date) : ''; };
+async function tdSend(id) {
+  const t = S.tasks.list.find(x => x.id === id); if (!t || t.td || TDX.busy) return; if (!t.date) { toast('Give it a date first'); return; }
+  const b = tdBlock(t), mins = b ? toMin(b.e) - toMin(b.s) : 0;
+  const task = { content: t.title, dueString: b ? `${t.date} ${b.s}` : t.date, labels: [TD_LABEL], priority: ['p4', 'p3', 'p2', 'p1'][t.pri || 0], description: 'From your GAMSAT planner. Tick it here or there.' };
+  if (mins > 0) task.duration = `${mins}m`;
+  TDX.busy = true; taskSheet(id);
+  try {
+    const p = await tdCall('add-tasks', { tasks: [task] });
+    const hit = tdItems(p).find(x => x.content === t.title) || tdItems(p)[0];
+    if (!hit) throw { code: 'tool_error', message: 'it didn\'t confirm the new task' };
+    t.td = { id: String(hit.id), at: tdWhen(t), done: false }; touch('tasks'); toast(b ? `In Todoist for ${fmtShort(t.date)} at ${b.s}` : `In Todoist for ${fmtShort(t.date)} (no time set)`);
+  } catch (e) { toast(tdErr(e)); }
+  TDX.busy = false; if ($('#sheet').innerHTML) taskSheet(id); render();
+}
+async function tdRemove(id) {
+  const t = S.tasks.list.find(x => x.id === id); if (!t || !t.td || TDX.busy) return;
+  TDX.busy = true; taskSheet(id);
+  try { await tdCall('delete-object', { type: 'task', id: t.td.id }); t.td = null; touch('tasks'); toast('Removed from Todoist'); }
+  catch (e) { if (e && e.code === 'tool_error') { t.td = null; touch('tasks'); toast('It was already gone from Todoist'); } else toast(tdErr(e)); }
+  TDX.busy = false; if ($('#sheet').innerHTML) taskSheet(id); render();
+}
+/* push: ticks and date/time changes made here */
+function tdSoon() { clearTimeout(TDX.timer); TDX.timer = setTimeout(tdPush, 1500); }
+async function tdPush() {
+  const linked = S.tasks.list.filter(t => t.td); if (!linked.length || TDX.busy) return;
+  TDX.busy = true; let changed = false;
+  try {
+    const comp = linked.filter(t => t.done && !t.td.done), reopen = linked.filter(t => !t.done && t.td.done);
+    if (comp.length) { await tdCall('complete-tasks', { ids: comp.map(t => t.td.id) }); comp.forEach(t => t.td.done = true); changed = true; }
+    if (reopen.length) { await tdCall('uncomplete-tasks', { ids: reopen.map(t => t.td.id) }); reopen.forEach(t => t.td.done = false); changed = true; }
+    const moved = linked.filter(t => !t.done && t.date && tdWhen(t) !== t.td.at);
+    if (moved.length) { await tdCall('reschedule-tasks', { tasks: moved.map(t => ({ id: t.td.id, date: tdWhen(t) })) }); moved.forEach(t => t.td.at = tdWhen(t)); changed = true; }
+  } catch (e) { if (e && !['not_granted', 'capability_disabled', 'not_in_manifest', 'server_not_connected'].includes(e.code)) toast(tdErr(e)); }
+  TDX.busy = false; if (changed) touch('tasks');
+}
+/* pull: ticks made in Todoist, read when the planner opens or comes back to the front (at most once a minute) */
+async function tdPull() {
+  const T = today(), linked = S.tasks.list.filter(t => t.td && (!t.date || t.date >= addDays(T, -14))).slice(0, 25);
+  if (!linked.length || TDX.busy || Date.now() - TDX.pulled < 60000) return;
+  TDX.busy = true; TDX.pulled = Date.now(); let changed = false;
+  for (const t of linked) {
+    try {
+      const p = await tdCall('fetch-object', { type: 'task', id: t.td.id });
+      const x = tdItems(p)[0] || (p && (p.task || p)); if (!x || typeof x !== 'object' || !('checked' in x || 'isCompleted' in x || 'completedAt' in x)) continue;
+      const remote = !!(x.checked || x.isCompleted || x.completedAt);
+      if (remote !== t.td.done) { t.td.done = remote; if (t.done !== remote) { t.done = remote; t.doneAt = remote ? Date.now() : null; } changed = true; }
+    } catch (e) { if (e && ['not_granted', 'capability_disabled', 'not_in_manifest', 'server_not_connected', 'needs_reauth'].includes(e.code)) break; }
+  }
+  TDX.busy = false; if (changed) { touch('tasks'); if (booted) safeRender(); }
+  tdSoon();
+}
+
 /* ============================== my routine (plain-English guide) ============================== */
 const ROUTINE = [
   ['start', 'Start here · once', '20 minutes, then never again', [
@@ -2393,6 +2470,8 @@ function taskSheet(id) {
     <div class="field"><span class="lab">Break it into steps</span><ul class="tasks" id="subs">${t.subs.map(s => `<li class="task ${s.done ? 'done' : ''}"><button class="chk" data-act="subToggle" data-id="${id}" data-s="${s.id}" aria-label="Step done"></button><span class="tmain"><span class="ttitle">${esc(s.t)}</span></span><button class="star" data-act="subDel" data-id="${id}" data-s="${s.id}" aria-label="Remove step">×</button></li>`).join('')}</ul>
       <div class="addrow"><input class="in" id="sub-add" placeholder="Add a step" data-enter="addSub" data-id="${id}"><button class="btn sm" data-act="addSub" data-id="${id}">Add</button></div></div>
     <div class="field"><span class="lab">Notes</span><textarea class="in" rows="3" data-inp="tnotes" data-id="${id}">${esc(t.notes || '')}</textarea></div>
+    ${t.td ? `<div class="row small" style="justify-content:space-between"><span>✓ In Todoist${t.date ? ` for ${fmtShort(t.date)}${taskSlot(t) ? ' at ' + taskSlot(t) : ''}` : ''}. Ticks sync both ways; change the time here.</span><button class="link" data-act="tdRemove" data-id="${id}" ${TDX.busy ? 'disabled' : ''}>Remove from Todoist</button></div>`
+      : `<button class="btn sm soft" style="align-self:flex-start" data-act="tdSend" data-id="${id}" ${TDX.busy || !t.date ? 'disabled' : ''}>${TDX.busy ? 'Sending…' : t.date ? `Send to Todoist${taskSlot(t) ? ` · ${fmtShort(t.date)} ${taskSlot(t)}` : ` · ${fmtShort(t.date)}, no time`}` : 'Send to Todoist (set a date first)'}</button>`}
     ${(() => { const slot = taskSlot(t); if (slot) return `<div class="row small"><span>⏱ Scheduled ${slot} on ${fmtShort(t.date)}</span><button class="link" data-act="taskUnblock" data-id="${id}">Unschedule</button></div>`;
       return UI.schedOpen === id ? `<div class="field"><span class="lab">Schedule a time (optional)</span><div class="row"><input type="time" class="in" id="tb-at" style="flex:0 1 130px"><span class="small muted">for ${fmtMin(t.est || 60)} on ${t.date ? fmtShort(t.date) : 'today'}</span><button class="btn sm" data-act="taskBlock" data-id="${id}">Add</button><button class="link" data-act="schedToggle" data-id="${id}">Cancel</button></div></div>` : `<button class="link" data-act="schedToggle" data-id="${id}" style="align-self:flex-start">+ Schedule a time (optional)</button>`; })()}
     <div class="row" style="justify-content:space-between"><button class="btn danger" data-act="taskDel" data-id="${id}">Delete</button><div class="row"><button class="btn" data-act="taskTmr" data-id="${id}">Move to tomorrow</button><button class="btn pri" data-act="close">Done</button></div></div>`);
@@ -2639,7 +2718,8 @@ const ACT = {
   schedToggle: el => { UI.schedOpen = UI.schedOpen === el.dataset.id ? null : el.dataset.id; taskSheet(el.dataset.id); if (UI.schedOpen) { const n = $('#tb-at'); if (n) n.focus(); } },
   taskUnblock: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); const dd = day(t.date, true); dd.blocks = (dd.blocks || []).filter(b => b.taskId !== t.id); touch(dayKey(t.date)); taskSheet(t.id); toast('Unscheduled. The task stays on its day.'); },
   taskBlock: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); const d = t.date || today(); const s = val('tb-at'); if (!s) { toast('Pick a time first'); return; } UI.schedOpen = null; const dd = day(d, true); (dd.blocks = dd.blocks || []).push({ id: uid(), s, e: toTime(Math.min(toMin(s) + (t.est || 60), 23 * 60 + 59)), t: t.title, cat: t.cat, taskId: t.id }); if (!t.date) { t.date = d; touch('tasks'); } touch(dayKey(d)); taskSheet(t.id); toast(`Scheduled ${s} on ${fmtShort(d)}`); },
-  taskDel: el => { closeSheet(); withUndo('Task deleted', ['tasks'], () => { S.tasks.list = S.tasks.list.filter(t => t.id !== el.dataset.id); commit('tasks'); }); },
+  tdSend: el => tdSend(el.dataset.id), tdRemove: el => tdRemove(el.dataset.id),
+  taskDel: el => { const dt = S.tasks.list.find(t => t.id === el.dataset.id); if (dt && dt.td) { const tid = dt.td.id, aid = dt.id; setTimeout(() => { if (!S.tasks.list.some(t => t.id === aid)) tdCall('delete-object', { type: 'task', id: tid }).catch(() => {}); }, 6000); } closeSheet(); withUndo('Task deleted', ['tasks'], () => { S.tasks.list = S.tasks.list.filter(t => t.id !== el.dataset.id); commit('tasks'); }); },
   taskTmr: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); t.date = addDays(t.date && t.date > today() ? t.date : today(), 1); touch('tasks'); closeSheet(); toast(`Moved to ${fmtShort(t.date)}`); },
   addSub: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); const v = val('sub-add').trim(); if (!v) return; t.subs.push({ id: uid(), t: v, done: false }); touch('tasks'); taskSheet(t.id); $('#sub-add').focus(); },
   subToggle: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); const s = t.subs.find(x => x.id === el.dataset.s); s.done = !s.done; touch('tasks'); taskSheet(t.id); },
@@ -2903,7 +2983,7 @@ document.addEventListener('dragover', e => { if (dragI != null && e.target.close
 document.addEventListener('drop', e => { const li = e.target.closest && e.target.closest('#cardlist li'); if (!li || dragI == null) return; e.preventDefault(); const a = S.core.settings.cards; const [m] = a.splice(dragI, 1); a.splice(+li.dataset.i, 0, m); dragI = null; commit('core'); });
 document.addEventListener('dragend', () => { dragI = null; document.querySelectorAll('#cardlist .drag').forEach(x => x.classList.remove('drag')); });
 /* flush text still waiting in a debounce when the page is hidden */
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} if (dirty.size) flush(); } else { if (UI.date < today() && UI.view === 'today' && UI.lastSeen !== today()) { UI.date = today(); } UI.lastSeen = today(); if (booted) safeRender(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} if (dirty.size) flush(); } else { if (UI.date < today() && UI.view === 'today' && UI.lastSeen !== today()) { UI.date = today(); } UI.lastSeen = today(); if (booted) { safeRender(); tdPull(); } } });
 setInterval(() => { if (booted && UI.view === 'today' && !$('#sheet').innerHTML) safeRender(); }, 5 * 60 * 1000);
 
 /* ============================== boot ============================== */
@@ -2927,7 +3007,7 @@ async function boot() {
   try { const raw = localStorage.getItem(LS); if (raw) { const j = JSON.parse(raw); if (j && j.core) S = { core: j.core, tasks: j.tasks, res: j.res || null, months: j.months || {}, archive: j.archive || {} }; } } catch (e) {}
   try { const u = JSON.parse(localStorage.getItem(LSUI) || '{}'); Object.assign(UI, { view: u.view || 'today', taskFilter: u.taskFilter || 'today', planMode: u.planMode || 'week', gTab: u.gTab || 'week' }); } catch (e) {}
   UI.lastSeen = today();
-  if (S.core) { normalise(); maybeArchive(); linkBlocks(); const dd = dedupeResources(); booted = true; render(); if (dd) toast(`Merged ${dd} duplicate resource${dd > 1 ? 's' : ''}`); initRemote(); return; }
+  if (S.core) { normalise(); maybeArchive(); linkBlocks(); const dd = dedupeResources(); booted = true; render(); if (dd) toast(`Merged ${dd} duplicate resource${dd > 1 ? 's' : ''}`); initRemote(); setTimeout(tdPull, 2500); return; }
   applyLook();
   await initRemote();
   if (S.core) { normalise(); maybeArchive(); booted = true; render(); } else welcome();
