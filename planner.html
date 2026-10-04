@@ -158,6 +158,9 @@ textarea.in{resize:vertical;min-height:70px;line-height:1.5}
 .tmain{flex:1;min-width:0;text-align:left;display:flex;flex-direction:column;gap:3px}
 .ttitle{overflow-wrap:anywhere}
 .done .ttitle{text-decoration:line-through;color:var(--faint)}
+.skipped .ttitle{text-decoration-style:dashed}
+.skipped > .chk{background:var(--sunk)!important;border-color:var(--faint)!important}
+.skipped > .chk::after{content:"×"!important;border:0!important;transform:none!important;left:0!important;top:-2px!important;width:100%!important;height:auto!important;text-align:center;color:var(--muted);font-size:15px;line-height:20px}
 .tmeta{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:12px;color:var(--muted)}
 .tmeta:empty{display:none}
 .star{color:var(--faint);font-size:16px;line-height:1;padding:2px 2px 0;flex:none}
@@ -651,16 +654,27 @@ function undate(t) {
   const dd = day(t.date); if (dd.blocks && dd.blocks.some(b => b.taskId === t.id)) { dd.blocks = dd.blocks.filter(b => b.taskId !== t.id); touch(dayKey(t.date)); }
   t.date = null; t.top = false; if (t.due && t.due < today()) t.due = null; // a deadline already missed would keep it overdue
 }
+/* did = actually done (a skipped task is closed but not done) */
+const did = t => t.done && !t.skipped;
+function spawnNext(t) {
+  if (!t.repeat || !t.date || t.spawned) return;
+  let nd = nextDate(t.date, t.repeat); const T = today();
+  while (nd && nd < T) nd = nextDate(nd, t.repeat);
+  S.tasks.list.push(newTask({ title: t.title, date: nd, cat: t.cat, sec: t.sec, pri: t.pri, est: t.est, notes: t.notes, repeat: t.repeat, projectId: t.projectId, subs: t.subs.map(s => ({ ...s, id: uid(), done: false })) }));
+  t.spawned = true; toast(`Next one added for ${fmtShort(nd)}`);
+}
 function toggleTask(id) {
   const t = S.tasks.list.find(x => x.id === id); if (!t) return;
+  if (t.skipped) { t.skipped = false; t.done = false; t.doneAt = null; t.skippedAt = null; commit('tasks'); toast('Back on your list'); return; }
   t.done = !t.done; t.doneAt = t.done ? Date.now() : null;
-  if (t.done && t.repeat && t.date && !t.spawned) {
-    let nd = nextDate(t.date, t.repeat); const T = today();
-    while (nd && nd < T) nd = nextDate(nd, t.repeat);
-    S.tasks.list.push(newTask({ title: t.title, date: nd, cat: t.cat, sec: t.sec, pri: t.pri, est: t.est, notes: t.notes, repeat: t.repeat, projectId: t.projectId, subs: t.subs.map(s => ({ ...s, id: uid(), done: false })) }));
-    t.spawned = true; toast(`Next one added for ${fmtShort(nd)}`);
-  }
+  if (t.done) spawnNext(t);
   commit('tasks');
+}
+/* "won't do": closes the task without deleting it, so it's still counted as not done */
+function skipTask(t, reason) {
+  if (!t || t.done) return;
+  t.skipped = true; t.done = true; t.doneAt = Date.now(); t.skippedAt = Date.now(); t.skipReason = reason || ''; t.top = false;
+  spawnNext(t);
 }
 
 /* recurring + one-off blocks for a day */
@@ -935,7 +949,7 @@ const dateNav = (act, label = 'Today') => `<div class="row" style="gap:6px"><but
 function greet() { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
 function vToday() {
   const D = UI.date, T = today(), isT = D === T;
-  const list = tasksOn(D); const done = list.filter(t => t.done).length;
+  const list = tasksOn(D).filter(t => !t.skipped); const done = list.filter(t => t.done).length;
   const hs = S.core.habits.filter(h => !h.archived && habitDue(h, D));
   const hDone = hs.filter(h => ticked(h, D)).length;
   const fm = focusIn(D, D);
@@ -969,10 +983,10 @@ function taskRow(t, o = {}) {
   const subsDone = t.subs.filter(s => s.done).length;
   const proj = t.projectId && S.core.projects.find(p => p.id === t.projectId);
   const slot = taskSlot(t);
-  const meta = [slot && !t.done ? `<span title="Scheduled">⏱ ${slot}</span>` : '', t.td ? '<span title="Also in Todoist">↗ Todoist</span>' : '', catChip(t.cat), secPill(t.sec), od ? `<span class="over">${t.date ? `from ${fmtShort(t.date)}` : `was due ${fmtShort(t.due)}`}</span>` : '', t.due && !t.done && !(od && !t.date) ? `<span class="${t.date && t.date > t.due ? 'over' : ''}" title="Due by">due ${t.due === T ? 'today' : fmtShort(t.due)}</span>` : '', o.date && t.date && !od ? `<span>${t.date === T ? 'Today' : fmtShort(t.date)}</span>` : '', t.est ? `<span>${fmtMin(t.est)}</span>` : '',  t.repeat ? `<span title="${repLabel(t.repeat)}">↻ ${repLabel(t.repeat).replace('Every ', '')}</span>` : '', proj && !o.noProj ? `<span>▸ ${esc(proj.title)}</span>` : '', t.ex ? '<span class="ex">example</span>' : ''].join('');
+  const meta = [t.skipped ? `<span class="due-chip">skipped${t.skipReason ? ' · ' + esc(t.skipReason) : ''}</span>` : '', slot && !t.done ? `<span title="Scheduled">⏱ ${slot}</span>` : '', t.td ? '<span title="Also in Todoist">↗ Todoist</span>' : '', catChip(t.cat), secPill(t.sec), od ? `<span class="over">${t.date ? `from ${fmtShort(t.date)}` : `was due ${fmtShort(t.due)}`}</span>` : '', t.due && !t.done && !(od && !t.date) ? `<span class="${t.date && t.date > t.due ? 'over' : ''}" title="Due by">due ${t.due === T ? 'today' : fmtShort(t.due)}</span>` : '', o.date && t.date && !od ? `<span>${t.date === T ? 'Today' : fmtShort(t.date)}</span>` : '', t.est ? `<span>${fmtMin(t.est)}</span>` : '',  t.repeat ? `<span title="${repLabel(t.repeat)}">↻ ${repLabel(t.repeat).replace('Every ', '')}</span>` : '', proj && !o.noProj ? `<span>▸ ${esc(proj.title)}</span>` : '', t.ex ? '<span class="ex">example</span>' : ''].join('');
   const open = UI.openSubs && UI.openSubs[t.id];
   const subsHtml = open ? `<li class="subs"><ul>${t.subs.map(s => `<li class="task ${s.done ? 'done' : ''}"><button class="chk" data-act="subTick" data-id="${t.id}" data-s="${s.id}" aria-label="Step done"></button><span class="tmain"><span class="ttitle">${esc(s.t)}</span></span><button class="star" data-act="subRm" data-id="${t.id}" data-s="${s.id}" aria-label="Remove step">×</button></li>`).join('')}</ul><input class="in" placeholder="+ Add a step, press Enter" data-enter="subAddInline" data-id="${t.id}" id="sa-${t.id}"></li>` : '';
-  return `<li class="task ${t.done ? 'done' : ''} pri${t.pri || 0}"><button class="chk" data-act="toggle" data-id="${t.id}" aria-label="${t.done ? 'Mark not done' : 'Mark done'}"></button><button class="tmain" data-act="edit" data-id="${t.id}"><span class="ttitle">${o.num ? '' : ''}${esc(t.title)}</span><span class="tmeta">${meta}</span></button>${t.subs.length || o.steps ? `<button class="subtog ${UI.openSubs && UI.openSubs[t.id] ? 'open' : ''}" data-act="subOpen" data-id="${t.id}" aria-expanded="${!!(UI.openSubs && UI.openSubs[t.id])}" title="Steps">${t.subs.length ? `${subsDone}/${t.subs.length}` : '+'}<span class="sr"> steps</span></button>` : ''}${o.star !== false ? `<button class="star ${t.top ? 'on' : ''}" data-act="star" data-id="${t.id}" aria-label="Top priority" title="Top 3">★</button>` : ''}</li>${subsHtml}`;
+  return `<li class="task ${t.done ? 'done' : ''} ${t.skipped ? 'skipped' : ''} pri${t.pri || 0}"><button class="chk" data-act="toggle" data-id="${t.id}" aria-label="${t.skipped ? 'Restore (put back on your list)' : t.done ? 'Mark not done' : 'Mark done'}" title="${t.skipped ? 'Skipped · tap to restore' : ''}"></button><button class="tmain" data-act="edit" data-id="${t.id}"><span class="ttitle">${o.num ? '' : ''}${esc(t.title)}</span><span class="tmeta">${meta}</span></button>${t.subs.length || o.steps ? `<button class="subtog ${UI.openSubs && UI.openSubs[t.id] ? 'open' : ''}" data-act="subOpen" data-id="${t.id}" aria-expanded="${!!(UI.openSubs && UI.openSubs[t.id])}" title="Steps">${t.subs.length ? `${subsDone}/${t.subs.length}` : '+'}<span class="sr"> steps</span></button>` : ''}${o.star !== false ? `<button class="star ${t.top ? 'on' : ''}" data-act="star" data-id="${t.id}" aria-label="Top priority" title="Top 3">★</button>` : ''}</li>${subsHtml}`;
 }
 const CARD = {
   top3(D) {
@@ -986,7 +1000,7 @@ const CARD = {
     const T = today(), isT = D === T;
     const od = isT ? sortTasks(overdue()) : [];
     const list = sortTasks(tasksOn(D).filter(t => !t.top));
-    return `<section class="card" id="card-todo"><div class="chead"><h3>To-do</h3><span class="lab">${tasksOn(D).filter(t => t.done).length}/${tasksOn(D).length} done</span></div>
+    return `<section class="card" id="card-todo"><div class="chead"><h3>To-do</h3><span class="lab">${tasksOn(D).filter(did).length}/${tasksOn(D).filter(t => !t.skipped).length} done</span></div>
       ${(() => { const ed = isT ? errDue(T) : []; return ed.length ? `<div class="field" style="gap:2px"><span class="lab">Retries &amp; drills due · ${ed.length}</span><ul class="tasks">${ed.map(errItem).join('')}</ul></div>` : ''; })()}
       ${od.length ? `<div class="carry"><div class="chead"><span class="over">${od.length} carried over</span><span class="row" style="gap:12px"><button class="link" data-act="moveAll">Move all to today</button><button class="link" data-act="undateAll">Remove dates</button></span></div><ul class="tasks">${od.map(t => taskRow(t)).join('')}</ul></div>` : ''}
       <ul class="tasks">${list.map(t => taskRow(t, { steps: true })).join('') || (od.length || (isT && errDue(T).length) ? '' : '<li class="empty">Nothing here yet.</li>')}</ul>
@@ -1017,7 +1031,7 @@ const CARD = {
     const bySec = s => focusIn(D, D, f => f.sec === s);
     return `<section class="card"><div class="chead"><h3>GAMSAT</h3><button class="link" data-act="go" data-v="gamsat">Study hub</button></div>
       <div class="row" style="justify-content:space-between;align-items:flex-end">${g.s2Date || left != null ? `<div class="row" style="gap:18px">${g.s2Date ? `<div class="stat"><span class="big" style="font-size:40px">${Math.max(0, diffDays(T, g.s2Date))}</span><span class="lab">days to S2</span></div>` : ''}${left != null ? `<div class="stat"><span class="big" style="font-size:40px">${Math.max(0, left)}</span><span class="lab">to S1 + S3</span></div>` : ''}</div>` : `<button class="btn sm soft" data-act="go" data-v="gamsat">Set your test date</button>`}
-      <div class="stat" style="text-align:right"><b>${gt.filter(t => t.done).length}/${gt.length}</b><span class="lab">study tasks today</span></div></div>
+      <div class="stat" style="text-align:right"><b>${gt.filter(did).length}/${gt.filter(t => !t.skipped).length}</b><span class="lab">study tasks today</span></div></div>
       ${(() => { const wk = mondayOf(D), gl = goalFor(wk), m = focusIn(wk, addDays(wk, 6), f => !!f.sec); return gl ? `<div class="field" style="gap:4px"><div class="row small" style="justify-content:space-between"><span class="muted">This week</span><span>${fmtMin(m)} / ${gl}h</span></div><div class="bar"><i style="width:${Math.min(100, m / (gl * 60) * 100)}%"></i></div></div>` : ''; })()}
       ${od ? `<p class="small over">${od} overdue study task${od > 1 ? 's' : ''}</p>` : ''}
       ${due ? `<p class="small">${due} topic${due > 1 ? 's' : ''} due for review · <button class="link" data-act="go" data-v="gamsat">review now</button></p>` : ''}
@@ -1057,7 +1071,7 @@ function timeline(D) {
   html += '</div>';
   return html;
 }
-function projProgress(p) { const ts = S.tasks.list.filter(t => t.projectId === p.id); const d = ts.filter(t => t.done).length; return { n: ts.length, done: d, pct: ts.length ? Math.round(d / ts.length * 100) : 0 }; }
+function projProgress(p) { const ts = S.tasks.list.filter(t => t.projectId === p.id && !t.skipped); const d = ts.filter(t => t.done).length; return { n: ts.length, done: d, pct: ts.length ? Math.round(d / ts.length * 100) : 0 }; }
 
 /* ============================== TASKS ============================== */
 function vTasks() {
@@ -1070,17 +1084,18 @@ function vTasks() {
     upcoming: all.filter(t => !t.done && t.date && t.date > T),
     someday: all.filter(t => !t.done && !t.date),
     orphans: orphans(),
-    done: all.filter(t => t.done).sort((a, b) => b.doneAt - a.doneAt).slice(0, 80),
+    done: all.filter(did).sort((a, b) => b.doneAt - a.doneAt).slice(0, 80),
+    skipped: all.filter(t => t.skipped).sort((a, b) => (b.skippedAt || 0) - (a.skippedAt || 0)).slice(0, 80),
   };
-  const labels = { overdue: 'Overdue', today: 'Today', upcoming: 'Upcoming', someday: 'No date', done: 'Done' }; if (f === 'orphans' && !groups.orphans.length) UI.taskFilter = 'overdue';
+  const labels = { overdue: 'Overdue', today: 'Today', upcoming: 'Upcoming', someday: 'No date', done: 'Done', skipped: 'Skipped' }; if (f === 'orphans' && !groups.orphans.length) UI.taskFilter = 'overdue';
   let list = groups[f].filter(match);
   let body;
   if (f === 'upcoming') {
     const by = {}; for (const t of sortTasks(list)) (by[t.date] = by[t.date] || []).push(t);
     body = Object.keys(by).sort().map(d => `<div class="field" style="gap:2px"><span class="lab">${fmt(d, { weekday: 'short', day: 'numeric', month: 'short' })} · in ${diffDays(T, d)}d</span><ul class="tasks">${by[d].map(t => taskRow(t)).join('')}</ul></div>`).join('') || '<p class="empty">Nothing scheduled ahead.</p>';
-  } else body = `<ul class="tasks">${(f === 'done' ? list : sortTasks(list)).map(t => taskRow(t, { date: true, steps: f !== 'done' })).join('') || `<li class="empty">${f === 'overdue' ? 'Nothing overdue. Nice.' : 'Nothing here.'}</li>`}</ul>`;
+  } else body = `<ul class="tasks">${(f === 'done' || f === 'skipped' ? list : sortTasks(list)).map(t => taskRow(t, { date: true, steps: f !== 'done' && f !== 'skipped' })).join('') || `<li class="empty">${f === 'overdue' ? 'Nothing overdue. Nice.' : f === 'skipped' ? 'Nothing skipped. Skip a task from its sheet when you decide not to do it.' : 'Nothing here.'}</li>`}</ul>`;
   const archived = Object.values(S.archive).reduce((a, x) => a + x.list.length, 0);
-  return header('Everything on your plate', 'Tasks', `<span><b>${groups.overdue.length}</b> overdue</span><span><b>${groups.today.filter(t => !t.done).length}</b> left today</span><span><b>${groups.upcoming.length}</b> upcoming</span>`,
+  return header('Everything on your plate', 'Tasks', `<span><b>${groups.overdue.length}</b> overdue</span><span><b>${groups.today.filter(t => !t.done).length}</b> left today</span>${groups.skipped.length ? `<span><b>${groups.skipped.filter(t => t.skippedAt >= Date.now() - 7 * 864e5).length}</b> skipped this week</span>` : ''}<span><b>${groups.upcoming.length}</b> upcoming</span>`,
     `<input class="in" style="width:220px" placeholder="Search tasks" value="${esc(UI.taskQ)}" data-inp="taskQ" id="task-q">`) +
     `<div class="chip-row">${Object.keys(labels).concat(groups.orphans.length ? ['orphans'] : []).map(k => `<button class="fchip ${f === k ? 'on' : ''}" data-act="tf" data-f="${k}">${labels[k] || 'Removed lists'}<span class="n">${groups[k].length}</span></button>`).join('')}</div>
     ${cats().length > 1 ? `<div class="chip-row"><button class="fchip ${!cf ? 'on' : ''}" data-act="tc" data-c="">All lists</button><button class="fchip ${cf === '_gamsat' ? 'on' : ''}" data-act="tc" data-c="_gamsat">GAMSAT (all sections)</button>${cats().map(c => `<button class="fchip ${cf === c.id ? 'on' : ''}" data-act="tc" data-c="${c.id}"><span class="dot" style="--h:${c.h}"></span> ${esc(c.name)}</button>`).join('')}</div>` : ''}
@@ -1342,7 +1357,8 @@ const WEEKLY_PROMPTS = [['well', 'What went well this week?'], ['notwell', "What
 function vReflect() {
   const D = UI.date, T = today(); const r = day(D).refl || {};
   const ws = weekStartOf(D), we = addDays(ws, 6); const wr = day(ws).weekly || {};
-  const wt = S.tasks.list.filter(t => t.done && t.doneAt && ymd(new Date(t.doneAt)) >= ws && ymd(new Date(t.doneAt)) <= we).length;
+  const wsk = S.tasks.list.filter(t => t.skipped && t.skippedAt && ymd(new Date(t.skippedAt)) >= ws && ymd(new Date(t.skippedAt)) <= we).length;
+  const wt = S.tasks.list.filter(t => did(t) && t.doneAt && ymd(new Date(t.doneAt)) >= ws && ymd(new Date(t.doneAt)) <= we).length;
   const hs = S.core.habits.filter(h => !h.archived); let due = 0, got = 0;
   for (let d = ws; d <= we && d <= T; d = addDays(d, 1)) for (const h of hs) if (habitDue(h, d) && h.freq.type !== 'times') { due++; if (ticked(h, d)) got++; }
   const moods = [], sl = []; for (let d = ws; d <= we; d = addDays(d, 1)) { const x = day(d); if (x.mood) moods.push(x.mood); if (x.sleep) sl.push(x.sleep); }
@@ -1357,7 +1373,7 @@ function vReflect() {
         ${DAILY_PROMPTS.map(([k, l]) => `<div class="prompt"><label for="rp-${k}">${l}</label><textarea id="rp-${k}" class="in" data-auto data-inp="refl" data-k="${k}" data-date="${D}" rows="1">${esc(r[k] || '')}</textarea></div>`).join('')}</section>
       <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
       <section class="card flat"><div class="chead"><h3>Week in review</h3><span class="lab">${fmtShort(ws)} – ${fmtShort(we)}</span></div>
-        <div class="stats"><div class="stat"><b>${wt}</b><span class="lab">tasks done</span></div><div class="stat"><b>${due ? Math.round(got / due * 100) + '%' : '–'}</b><span class="lab">habits kept</span></div><div class="stat"><b>${fmtMin(study)}</b><span class="lab">GAMSAT study</span></div><div class="stat"><b>${am ? MOODS[Math.round(am) - 1] : '–'}</b><span class="lab">avg mood</span></div><div class="stat"><b>${avg(sl) ? avg(sl).toFixed(1) + 'h' : '–'}</b><span class="lab">avg sleep</span></div></div>
+        <div class="stats"><div class="stat"><b>${wt}</b><span class="lab">tasks done</span></div><div class="stat"><b>${wsk}</b><span class="lab">skipped</span></div><div class="stat"><b>${due ? Math.round(got / due * 100) + '%' : '–'}</b><span class="lab">habits kept</span></div><div class="stat"><b>${fmtMin(study)}</b><span class="lab">GAMSAT study</span></div><div class="stat"><b>${am ? MOODS[Math.round(am) - 1] : '–'}</b><span class="lab">avg mood</span></div><div class="stat"><b>${avg(sl) ? avg(sl).toFixed(1) + 'h' : '–'}</b><span class="lab">avg sleep</span></div></div>
         ${WEEKLY_PROMPTS.map(([k, l]) => `<div class="prompt"><label for="wp-${k}" style="font-size:18px">${l}</label><textarea id="wp-${k}" class="in" data-auto data-inp="weekly" data-k="${k}" data-date="${ws}" rows="1">${esc(wr[k] || '')}</textarea></div>`).join('')}</section>
       <section class="card flat"><div class="chead"><h3>Past entries</h3></div><div>${past.map(([d, t]) => `<button class="entry" data-act="openRefl" data-date="${d}" style="width:100%"><span class="lab">${fmt(d, { weekday: 'short', day: 'numeric', month: 'short' })}</span><p>${esc(t)}</p></button>`).join('') || '<p class="empty">Your entries will collect here.</p>'}</div></section></div></div>`;
 }
@@ -1624,7 +1640,8 @@ function scaffoldSheet() {
   const g = S.core.settings.gamsat; const st = (g.scaffold || {})[ws] || {};
   const lg = goalFor(last), lm = focusIn(last, addDays(last, 6), f => !!f.sec);
   const lsec = s => fmtMin(focusIn(last, addDays(last, 6), f => f.sec === s));
-  const done = S.tasks.list.filter(t => t.done && t.doneAt && ymd(new Date(t.doneAt)) >= last && ymd(new Date(t.doneAt)) <= addDays(last, 6)).length;
+  const skp = S.tasks.list.filter(t => t.skipped && t.skippedAt && ymd(new Date(t.skippedAt)) >= last && ymd(new Date(t.skippedAt)) <= addDays(last, 6)).length;
+  const done = S.tasks.list.filter(t => did(t) && t.doneAt && ymd(new Date(t.doneAt)) >= last && ymd(new Date(t.doneAt)) <= addDays(last, 6)).length;
   const mk = S.core.mistakes.filter(m => m.date >= last && m.date <= addDays(last, 6)).length;
   const q = S.core.topics.filter(tp => ['gap', 'due'].includes(topicState(tp))).length;
   const sg = secGoalsFor(ws); const up = upcomingKeys(21);
@@ -1632,7 +1649,7 @@ function scaffoldSheet() {
   const n = SCAF.filter(([k]) => st[k]).length;
   openSheet(sheetHead('Weekly Scaffold', `<span class="lab">${n}/${SCAF.length}</span>`) + `
     <p class="small muted">For the week of <b>${fmtLong(ws)}</b>. Your course treats this as non-negotiable before each week starts.</p>
-    <div class="card flat" style="background:var(--sunk);gap:6px"><span class="lab">Last week</span><div class="stats"><div class="stat"><b>${(lm / 60).toFixed(1)}/${lg}h</b><span class="lab">study</span></div><div class="stat"><b>${done}</b><span class="lab">tasks done</span></div><div class="stat"><b>${mk}</b><span class="lab">wrong answers logged</span></div></div><span class="small muted">S1 ${lsec('S1')} · S2 ${lsec('S2')} · S3 ${lsec('S3')}</span></div>
+    <div class="card flat" style="background:var(--sunk);gap:6px"><span class="lab">Last week</span><div class="stats"><div class="stat"><b>${(lm / 60).toFixed(1)}/${lg}h</b><span class="lab">study</span></div><div class="stat"><b>${done}</b><span class="lab">tasks done</span></div><div class="stat"><b>${skp}</b><span class="lab">skipped</span></div><div class="stat"><b>${mk}</b><span class="lab">wrong answers logged</span></div></div><span class="small muted">S1 ${lsec('S1')} · S2 ${lsec('S2')} · S3 ${lsec('S3')}</span></div>
     <ul class="tasks">${SCAF.map(([k, t, d]) => `<li class="task ${st[k] ? 'done' : ''}" style="align-items:flex-start"><button class="chk" data-act="scafTick" data-k="${k}" data-ws="${ws}" aria-label="Done"></button><div class="tmain" style="gap:6px"><span class="ttitle">${t}</span><span class="small muted">${d}</span>${btn[k]}</div></li>`).join('')}</ul>
     <div class="row" style="justify-content:flex-end"><button class="btn pri" data-act="close">Done for now</button></div>`, { wide: true });
 }
@@ -2118,7 +2135,7 @@ async function tdPull() {
       const p = await tdCall('fetch-object', { type: 'task', id: t.td.id });
       const x = tdItems(p)[0] || (p && (p.task || p)); if (!x || typeof x !== 'object' || !('checked' in x || 'isCompleted' in x || 'completedAt' in x)) continue;
       const remote = !!(x.checked || x.isCompleted || x.completedAt);
-      if (remote !== t.td.done) { t.td.done = remote; if (t.done !== remote) { t.done = remote; t.doneAt = remote ? Date.now() : null; } changed = true; }
+      if (remote !== t.td.done) { t.td.done = remote; if (t.done !== remote) { t.done = remote; t.doneAt = remote ? Date.now() : null; if (!remote) { t.skipped = false; t.skippedAt = null; } } changed = true; }
     } catch (e) { if (e && ['not_granted', 'capability_disabled', 'not_in_manifest', 'server_not_connected', 'needs_reauth'].includes(e.code)) break; }
   }
   TDX.busy = false; if (changed) { touch('tasks'); if (booted) safeRender(); }
@@ -2520,6 +2537,8 @@ function taskSheet(id) {
     <div class="field"><span class="lab">Break it into steps</span><ul class="tasks" id="subs">${t.subs.map(s => `<li class="task ${s.done ? 'done' : ''}"><button class="chk" data-act="subToggle" data-id="${id}" data-s="${s.id}" aria-label="Step done"></button><span class="tmain"><span class="ttitle">${esc(s.t)}</span></span><button class="star" data-act="subDel" data-id="${id}" data-s="${s.id}" aria-label="Remove step">×</button></li>`).join('')}</ul>
       <div class="addrow"><input class="in" id="sub-add" placeholder="Add a step" data-enter="addSub" data-id="${id}"><button class="btn sm" data-act="addSub" data-id="${id}">Add</button></div></div>
     <div class="field"><span class="lab">Notes</span><textarea class="in" rows="3" data-inp="tnotes" data-id="${id}">${esc(t.notes || '')}</textarea></div>
+    ${t.skipped ? `<div class="carry" style="background:var(--sunk)"><div class="chead"><span class="small"><b>Skipped</b> ${t.skippedAt ? fmtShort(ymd(new Date(t.skippedAt))) : ''}${t.skipReason ? ` · ${esc(t.skipReason)}` : ''}</span><button class="link" data-act="taskRestore" data-id="${id}">Restore</button></div></div>`
+      : !t.done ? `<div class="field"><span class="lab">Not going to do it?</span><div class="addrow"><input class="in" id="sk-r" list="sk-rs" placeholder="Why? (optional)"><datalist id="sk-rs">${['No time', 'Not needed any more', 'Done another way', 'Too tired / unwell', 'Plans changed'].map(r => `<option value="${r}">`).join('')}</datalist><button class="btn sm" data-act="taskSkip" data-id="${id}">Skip it</button></div><span class="small muted">Closes it without deleting. It's kept under Tasks → Skipped and counted in your weekly review.</span></div>` : ''}
     ${t.td ? `<div class="row small" style="justify-content:space-between"><span>✓ In Todoist${t.date ? ` for ${fmtShort(t.date)}${taskSlot(t) ? ' at ' + taskSlot(t) : ''}` : ''}. Ticks sync both ways; change the time here.</span><button class="link" data-act="tdRemove" data-id="${id}" ${TDX.busy ? 'disabled' : ''}>Remove from Todoist</button></div>`
       : `<button class="btn sm soft" style="align-self:flex-start" data-act="tdSend" data-id="${id}" ${TDX.busy || !t.date ? 'disabled' : ''}>${TDX.busy ? 'Sending…' : t.date ? `Send to Todoist${taskSlot(t) ? ` · ${fmtShort(t.date)} ${taskSlot(t)}` : ` · ${fmtShort(t.date)}, no time`}` : 'Send to Todoist (set a date first)'}</button>${S.core.settings.tdLayout ? `<span class="small muted">Goes to ${esc(tdDest(t, S.core.settings.tdLayout).label)}</span>` : ''}`}
     ${(() => { const slot = taskSlot(t); if (slot) return `<div class="row small"><span>⏱ Scheduled ${slot} on ${fmtShort(t.date)}</span><button class="link" data-act="taskUnblock" data-id="${id}">Unschedule</button></div>`;
@@ -2715,6 +2734,8 @@ const ACT = {
   addChunk: el => addTaskFrom('chunk-add', null, { force: { projectId: el.dataset.id, cat: (S.core.projects.find(p => p.id === el.dataset.id) || {}).cat || '' } }),
   addG: () => { const sec = val('g-sec'); addTaskFrom('g-add', today(), { force: { cat: gamsatCat() ? gamsatCat().id : '', ...(sec ? { sec } : {}) } }); },
   orphanDel: () => withUndo('Deleted tasks from removed lists', ['tasks'], () => { const o = new Set(orphans()); S.tasks.list = S.tasks.list.filter(t => !o.has(t)); UI.taskFilter = 'overdue'; commit('tasks'); }),
+  taskSkip: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); if (!t) return; const r = val('sk-r').trim(); withUndo(`Skipped${r ? ` (${r})` : ''}. Kept under Tasks → Skipped`, ['tasks'], () => { skipTask(t, r); commit('tasks'); }); closeSheet(); },
+  taskRestore: el => { toggleTask(el.dataset.id); taskSheet(el.dataset.id); },
   taskUndate: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); if (!t) return; const old = t.date; withUndo(`Date removed (was ${fmtShort(old)}). It's in “No date” now`, ['tasks', dayKey(old)], () => { undate(t); touch('tasks'); }); taskSheet(t.id); render(); },
   undateAll: el => { const list = overdue().filter(t => t.date && (!el.dataset.g || isGamsat(t))); if (!list.length) return; const keys = [...new Set(['tasks', ...list.map(t => dayKey(t.date))])];
     withUndo(`${list.length} task${list.length > 1 ? 's' : ''} moved to “No date”`, keys, () => { list.forEach(undate); commit('tasks'); }); },
