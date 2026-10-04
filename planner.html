@@ -2029,14 +2029,40 @@ function tdErr(e) {
 }
 const tdBlock = t => t.date ? (day(t.date).blocks || []).find(x => x.taskId === t.id) : null;
 const tdWhen = t => { const b = tdBlock(t); return t.date ? (b ? `${t.date}T${b.s}:00` : t.date) : ''; };
-/* your existing GAMSAT project in Todoist (found by name, remembered); Inbox if there isn't one */
-async function tdProject() {
-  const st = S.core.settings; if (st.tdProject) return st.tdProject;
-  const p = await tdCall('find-projects', { searchText: 'gamsat' });
-  const list = []; const walk = x => { if (!x || typeof x !== 'object') return; if (Array.isArray(x)) { for (const y of x) { if (y && y.id && y.name) list.push(y); else walk(y); } return; } for (const v of Object.values(x)) walk(v); }; walk(p);
-  const hit = list.find(x => /gamsat/i.test(x.name) && !x.isArchived);
-  if (hit) { st.tdProject = { id: String(hit.id), name: hit.name }; touch('core'); return st.tdProject; }
-  return null;
+/* your Todoist GAMSAT layout: parent project → "section 1/2/3" subprojects → their sections. Read once a week, remembered. */
+const TD_KINDS = [ // first match wins; each kind lands in the first section whose name matches
+  ['analysis', /analy|mark (it|mock|both)|log (wrong|scores|essays)|wrong or guessed|self-mark|review every|mock review/i, /analy/i],
+  ['mocks', /mock|practice test|online test|prep test|check-?in|evaluation/i, /mock/i],
+  ['drills', /drill|skills? practice|hard skills/i, /drill/i],
+  ['questions', /\bdes\b|acer/i, /question/i],
+  ['strategy', /strateg|guide|\bchp\b|chapter|course|module|lesson|framework/i, /strateg|guide/i],
+  ['plans', /plan(s|ning)?\b|outline|brainstorm|quote set|ideas bank/i, /plan/i],
+  ['essays', /essay|task a\b|task b\b|timed write/i, /essay/i],
+  ['content', /content|syllabus|literacy|\brv\b|revision|flashcard|anki|notes|topic|maths? review|science/i, /content/i],
+  ['questions', /question|\bqs?\b|\bq\d|mcq|passage|practice|des\b|acer|set\b/i, /question/i],
+];
+async function tdLayout(fresh) {
+  const st = S.core.settings, L = st.tdLayout;
+  if (!fresh && L && L.at && Date.now() - L.at < 7 * 864e5) return L;
+  const all = []; const walk = x => { if (!x || typeof x !== 'object') return; if (Array.isArray(x)) { for (const y of x) { if (y && y.id && y.name) all.push(y); else walk(y); } return; } for (const v of Object.values(x)) walk(v); };
+  walk(await tdCall('find-projects', { limit: 200 }));
+  const parent = all.find(x => /gamsat/i.test(x.name) && !x.parentId && !x.isArchived); if (!parent) { st.tdLayout = null; return null; }
+  const out = { at: Date.now(), parent: { id: String(parent.id), name: parent.name }, subs: {} };
+  for (const k of ['1', '2', '3']) {
+    const sub = all.find(x => String(x.parentId) === String(parent.id) && !x.isArchived && new RegExp(`(section|\\bs)\\s*${k}\\b`, 'i').test(x.name)); if (!sub) continue;
+    const secs = []; const w2 = x => { if (!x || typeof x !== 'object') return; if (Array.isArray(x)) { for (const y of x) { if (y && y.id && y.name) secs.push({ id: String(y.id), name: y.name }); else w2(y); } return; } for (const v of Object.values(x)) w2(v); };
+    try { w2(await tdCall('find-sections', { projectId: String(sub.id) })); } catch (e) { if (e && e.code !== 'tool_error') throw e; }
+    out.subs['S' + k] = { id: String(sub.id), name: sub.name, sections: secs };
+  }
+  st.tdLayout = out; touch('core'); return out;
+}
+/* where a task goes: its section's subproject (S1/S2/S3), then the section that fits the task */
+function tdDest(t, L) {
+  if (!L) return { projectId: 'inbox', label: 'Inbox' };
+  const sec = t.sec || ((t.title.match(/\bS([123])\b/) || [])[1] ? 'S' + t.title.match(/\bS([123])\b/)[1] : '');
+  const sub = L.subs[sec]; if (!sub) return { projectId: L.parent.id, label: L.parent.name };
+  for (const [, re, secRe] of TD_KINDS) { if (!re.test(t.title)) continue; const hit = sub.sections.find(x => secRe.test(x.name)); if (hit) return { projectId: sub.id, sectionId: hit.id, label: `${sub.name} › ${hit.name}` }; }
+  return { projectId: sub.id, label: sub.name };
 }
 async function tdSend(id) {
   const t = S.tasks.list.find(x => x.id === id); if (!t || t.td || TDX.busy) return; if (!t.date) { toast('Give it a date first'); return; }
@@ -2045,13 +2071,13 @@ async function tdSend(id) {
   if (mins > 0) task.duration = `${mins}m`;
   TDX.busy = true; taskSheet(id);
   try {
-    let proj = null; try { proj = await tdProject(); } catch (e) { if (e && e.code !== 'tool_error') throw e; }
-    task.projectId = proj ? proj.id : 'inbox';
+    let L = null; try { L = await tdLayout(); } catch (e) { if (e && e.code !== 'tool_error') throw e; }
+    let dest = tdDest(t, L); Object.assign(task, { projectId: dest.projectId }, dest.sectionId ? { sectionId: dest.sectionId } : {});
     let p; try { p = await tdCall('add-tasks', { tasks: [task] }); }
-    catch (e) { if (proj && e && e.code === 'tool_error') { S.core.settings.tdProject = null; proj = await tdProject(); task.projectId = proj ? proj.id : 'inbox'; p = await tdCall('add-tasks', { tasks: [task] }); } else throw e; }
+    catch (e) { if (L && e && e.code === 'tool_error') { L = await tdLayout(true); dest = tdDest(t, L); delete task.sectionId; Object.assign(task, { projectId: dest.projectId }, dest.sectionId ? { sectionId: dest.sectionId } : {}); p = await tdCall('add-tasks', { tasks: [task] }); } else throw e; }
     const hit = tdItems(p).find(x => x.content === t.title) || tdItems(p)[0];
     if (!hit) throw { code: 'tool_error', message: 'it didn\'t confirm the new task' };
-    t.td = { id: String(hit.id), at: tdWhen(t), done: false }; touch('tasks'); toast(`${b ? `In Todoist for ${fmtShort(t.date)} at ${b.s}` : `In Todoist for ${fmtShort(t.date)} (no time set)`} · ${proj ? proj.name : 'Inbox'}`);
+    t.td = { id: String(hit.id), at: tdWhen(t), done: false }; touch('tasks'); toast(`${b ? `In Todoist for ${fmtShort(t.date)} at ${b.s}` : `In Todoist for ${fmtShort(t.date)} (no time set)`} · ${dest.label}`);
   } catch (e) { toast(tdErr(e)); }
   TDX.busy = false; if ($('#sheet').innerHTML) taskSheet(id); render();
 }
@@ -2489,7 +2515,7 @@ function taskSheet(id) {
       <div class="addrow"><input class="in" id="sub-add" placeholder="Add a step" data-enter="addSub" data-id="${id}"><button class="btn sm" data-act="addSub" data-id="${id}">Add</button></div></div>
     <div class="field"><span class="lab">Notes</span><textarea class="in" rows="3" data-inp="tnotes" data-id="${id}">${esc(t.notes || '')}</textarea></div>
     ${t.td ? `<div class="row small" style="justify-content:space-between"><span>✓ In Todoist${t.date ? ` for ${fmtShort(t.date)}${taskSlot(t) ? ' at ' + taskSlot(t) : ''}` : ''}. Ticks sync both ways; change the time here.</span><button class="link" data-act="tdRemove" data-id="${id}" ${TDX.busy ? 'disabled' : ''}>Remove from Todoist</button></div>`
-      : `<button class="btn sm soft" style="align-self:flex-start" data-act="tdSend" data-id="${id}" ${TDX.busy || !t.date ? 'disabled' : ''}>${TDX.busy ? 'Sending…' : t.date ? `Send to Todoist${taskSlot(t) ? ` · ${fmtShort(t.date)} ${taskSlot(t)}` : ` · ${fmtShort(t.date)}, no time`}` : 'Send to Todoist (set a date first)'}</button>`}
+      : `<button class="btn sm soft" style="align-self:flex-start" data-act="tdSend" data-id="${id}" ${TDX.busy || !t.date ? 'disabled' : ''}>${TDX.busy ? 'Sending…' : t.date ? `Send to Todoist${taskSlot(t) ? ` · ${fmtShort(t.date)} ${taskSlot(t)}` : ` · ${fmtShort(t.date)}, no time`}` : 'Send to Todoist (set a date first)'}</button>${S.core.settings.tdLayout ? `<span class="small muted">Goes to ${esc(tdDest(t, S.core.settings.tdLayout).label)}</span>` : ''}`}
     ${(() => { const slot = taskSlot(t); if (slot) return `<div class="row small"><span>⏱ Scheduled ${slot} on ${fmtShort(t.date)}</span><button class="link" data-act="taskUnblock" data-id="${id}">Unschedule</button></div>`;
       return UI.schedOpen === id ? `<div class="field"><span class="lab">Schedule a time (optional)</span><div class="row"><input type="time" class="in" id="tb-at" style="flex:0 1 130px"><span class="small muted">for ${fmtMin(t.est || 60)} on ${t.date ? fmtShort(t.date) : 'today'}</span><button class="btn sm" data-act="taskBlock" data-id="${id}">Add</button><button class="link" data-act="schedToggle" data-id="${id}">Cancel</button></div></div>` : `<button class="link" data-act="schedToggle" data-id="${id}" style="align-self:flex-start">+ Schedule a time (optional)</button>`; })()}
     <div class="row" style="justify-content:space-between"><button class="btn danger" data-act="taskDel" data-id="${id}">Delete</button><div class="row"><button class="btn" data-act="taskTmr" data-id="${id}">Move to tomorrow</button><button class="btn pri" data-act="close">Done</button></div></div>`);
