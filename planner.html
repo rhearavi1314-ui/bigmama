@@ -654,6 +654,10 @@ function undate(t) {
   const dd = day(t.date); if (dd.blocks && dd.blocks.some(b => b.taskId === t.id)) { dd.blocks = dd.blocks.filter(b => b.taskId !== t.id); touch(dayKey(t.date)); }
   t.date = null; t.top = false; if (t.due && t.due < today()) t.due = null; // a deadline already missed would keep it overdue
 }
+/* GAMSAT section of a task (its tag, or S1/S2/S3 in the title); undated lists are ordered S1, S2, S3, then the rest */
+const secOf = t => t.sec || ((t.title.match(/\bS([123])\b/) || [])[1] ? 'S' + t.title.match(/\bS([123])\b/)[1] : '');
+const SEC_ORDER = { S1: 0, S2: 1, S3: 2, '': 3 };
+const bySec = list => sortTasks(list).sort((a, b) => SEC_ORDER[secOf(a)] - SEC_ORDER[secOf(b)]);
 /* did = actually done (a skipped task is closed but not done) */
 const did = t => t.done && !t.skipped;
 function spawnNext(t) {
@@ -1090,7 +1094,10 @@ function vTasks() {
   const labels = { overdue: 'Overdue', today: 'Today', upcoming: 'Upcoming', someday: 'No date', done: 'Done', skipped: 'Skipped' }; if (f === 'orphans' && !groups.orphans.length) UI.taskFilter = 'overdue';
   let list = groups[f].filter(match);
   let body;
-  if (f === 'upcoming') {
+  if (f === 'someday') {
+    const L = bySec(list); const groupsS = ['S1', 'S2', 'S3', ''].map(k => [k, L.filter(t => secOf(t) === k)]).filter(([, l]) => l.length);
+    body = groupsS.map(([k, l]) => `<div class="field" style="gap:2px"><span class="lab">${k ? `${secPill(k)} ${SECS[k]}` : 'No section'} · ${l.length}</span><ul class="tasks">${l.map(t => taskRow(t, { steps: true })).join('')}</ul></div>`).join('') || '<p class="empty">No undated tasks.</p>';
+  } else if (f === 'upcoming') {
     const by = {}; for (const t of sortTasks(list)) (by[t.date] = by[t.date] || []).push(t);
     body = Object.keys(by).sort().map(d => `<div class="field" style="gap:2px"><span class="lab">${fmt(d, { weekday: 'short', day: 'numeric', month: 'short' })} · in ${diffDays(T, d)}d</span><ul class="tasks">${by[d].map(t => taskRow(t)).join('')}</ul></div>`).join('') || '<p class="empty">Nothing scheduled ahead.</p>';
   } else body = `<ul class="tasks">${(f === 'done' || f === 'skipped' ? list : sortTasks(list)).map(t => taskRow(t, { date: true, steps: f !== 'done' && f !== 'skipped' })).join('') || `<li class="empty">${f === 'overdue' ? 'Nothing overdue. Nice.' : f === 'skipped' ? 'Nothing skipped. Skip a task from its sheet when you decide not to do it.' : 'Nothing here.'}</li>`}</ul>`;
@@ -1155,7 +1162,7 @@ function vCalendar(days) {
   const sched = scheduledMap(days);
   const tf = UI.trayF || 'range';
   const inRange = t => t.date && t.date >= days[0] && t.date <= days[days.length - 1];
-  const tray = sortTasks(S.tasks.list.filter(t => !t.done && !sched.has(t.id) && (tf === 'range' ? inRange(t) || (t.date && t.date < T && days.includes(T)) : tf === 'overdue' ? isLate(t, T) : !t.date)));
+  const tray = (tf === 'nodate' ? bySec : sortTasks)(S.tasks.list.filter(t => !t.done && !sched.has(t.id) && (tf === 'range' ? inRange(t) || (t.date && t.date < T && days.includes(T)) : tf === 'overdue' ? isLate(t, T) : !t.date)));
   const counts = { range: S.tasks.list.filter(t => !t.done && !sched.has(t.id) && inRange(t)).length, overdue: overdue().length, nodate: S.tasks.list.filter(t => !t.done && !t.date).length };
   const nm = new Date().getHours() * 60 + new Date().getMinutes();
   const col = d => {
@@ -1293,7 +1300,7 @@ function vGamsat() {
         <ul class="tasks">${td.map(t => taskRow(t)).join('') || '<li class="empty">Nothing set for today.</li>'}</ul>
         ${(() => { const ed = errDue(addDays(T, 7)); const now = ed.filter(x => x.due <= T), soon = ed.filter(x => x.due > T); return ed.length ? `<span class="lab">Retries &amp; drills${now.length ? ` · ${now.length} due` : ''}</span><ul class="tasks">${now.map(errItem).join('')}${soon.map(errItem).join('')}</ul>` : ''; })()}
         ${up.length ? `<span class="lab">Next 7 days</span><ul class="tasks">${up.map(t => taskRow(t, { date: true })).join('')}</ul>` : ''}
-        ${(() => { const nd = sortTasks(gts.filter(t => !t.done && !t.date)); return nd.length ? `<span class="lab">No day set yet · ${nd.length}</span><ul class="tasks">${nd.map(t => taskRow(t)).join('')}</ul><p class="small muted">Give one a date in its sheet, or drag it onto the calendar (Week & month → “No date”).</p>` : ''; })()}
+        ${(() => { const nd = bySec(gts.filter(t => !t.done && !t.date)); return nd.length ? `<span class="lab">No day set yet · ${nd.length}</span><ul class="tasks">${nd.map(t => taskRow(t)).join('')}</ul><p class="small muted">Give one a date in its sheet, or drag it onto the calendar (Week & month → “No date”).</p>` : ''; })()}
         <div class="addrow"><select class="in" id="g-sec" style="flex:0 0 76px"><option>S1</option><option>S2</option><option selected>S3</option><option value="">Any</option></select><input class="in" id="g-add" placeholder="e.g. Buffers practice set tomorrow 45m" data-enter="addG"><button class="btn sm" data-act="addG">Add</button></div></section>
     </div>
     ${UI.gTab === 'content' ? contentTracker() : ''}
