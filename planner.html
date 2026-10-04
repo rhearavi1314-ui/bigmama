@@ -645,6 +645,12 @@ function nextDate(date, rep) {
   if (rep === 'monthly') { const d = pd(date); const dom = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + 1); const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); d.setDate(Math.min(dom, last)); return ymd(d); }
   return null;
 }
+/* take a task off its day: it goes to "No date" (and drops its time block) until you schedule it again */
+function undate(t) {
+  if (!t || !t.date) return;
+  const dd = day(t.date); if (dd.blocks && dd.blocks.some(b => b.taskId === t.id)) { dd.blocks = dd.blocks.filter(b => b.taskId !== t.id); touch(dayKey(t.date)); }
+  t.date = null; t.top = false; if (t.due && t.due < today()) t.due = null; // a deadline already missed would keep it overdue
+}
 function toggleTask(id) {
   const t = S.tasks.list.find(x => x.id === id); if (!t) return;
   t.done = !t.done; t.doneAt = t.done ? Date.now() : null;
@@ -982,7 +988,7 @@ const CARD = {
     const list = sortTasks(tasksOn(D).filter(t => !t.top));
     return `<section class="card" id="card-todo"><div class="chead"><h3>To-do</h3><span class="lab">${tasksOn(D).filter(t => t.done).length}/${tasksOn(D).length} done</span></div>
       ${(() => { const ed = isT ? errDue(T) : []; return ed.length ? `<div class="field" style="gap:2px"><span class="lab">Retries &amp; drills due · ${ed.length}</span><ul class="tasks">${ed.map(errItem).join('')}</ul></div>` : ''; })()}
-      ${od.length ? `<div class="carry"><div class="chead"><span class="over">${od.length} carried over</span><button class="link" data-act="moveAll">Move all to today</button></div><ul class="tasks">${od.map(t => taskRow(t)).join('')}</ul></div>` : ''}
+      ${od.length ? `<div class="carry"><div class="chead"><span class="over">${od.length} carried over</span><span class="row" style="gap:12px"><button class="link" data-act="moveAll">Move all to today</button><button class="link" data-act="undateAll">Remove dates</button></span></div><ul class="tasks">${od.map(t => taskRow(t)).join('')}</ul></div>` : ''}
       <ul class="tasks">${list.map(t => taskRow(t, { steps: true })).join('') || (od.length || (isT && errDue(T).length) ? '' : '<li class="empty">Nothing here yet.</li>')}</ul>
       <div class="addrow"><input class="in" id="todo-add" placeholder="Add a task… try &quot;S3 flashcards 30m #gamsat&quot;" data-enter="addTodo"><button class="btn sm" data-act="addTodo">Add</button></div></section>`;
   },
@@ -1080,7 +1086,7 @@ function vTasks() {
     ${cats().length > 1 ? `<div class="chip-row"><button class="fchip ${!cf ? 'on' : ''}" data-act="tc" data-c="">All lists</button><button class="fchip ${cf === '_gamsat' ? 'on' : ''}" data-act="tc" data-c="_gamsat">GAMSAT (all sections)</button>${cats().map(c => `<button class="fchip ${cf === c.id ? 'on' : ''}" data-act="tc" data-c="${c.id}"><span class="dot" style="--h:${c.h}"></span> ${esc(c.name)}</button>`).join('')}</div>` : ''}
     ${(() => { const n = orphans().length; return n ? `<div class="card flat row" style="justify-content:space-between;background:var(--sunk)"><span class="small"><b>${n} unfinished task${n > 1 ? 's' : ''}</b> from lists you removed (${esc((S.core.removedCats || []).join(', ') || 'old lists')}). Move ${n > 1 ? 'them' : 'it'} to Todoist, then clear ${n > 1 ? 'them' : 'it'} here.</span><span class="row"><button class="btn sm" data-act="tf" data-f="orphans">Show</button><button class="btn sm danger" data-act="orphanDel">Delete ${n > 1 ? 'them' : 'it'}</button></span></div>` : ''; })()}
     <section class="card flat"><div class="addrow"><input class="in" id="tasks-add" placeholder="Add a task… &quot;S3 organic chem notes fri !1 45m&quot;" data-enter="addTasks"><button class="btn pri sm" data-act="addTasks">Add</button></div>
-    ${f === 'overdue' && groups.overdue.length ? `<div class="row"><button class="btn sm soft" data-act="moveAll">Move all ${groups.overdue.length} to today</button><button class="btn sm" data-act="moveAllTmr">Push all to tomorrow</button></div>` : ''}
+    ${f === 'overdue' && groups.overdue.length ? `<div class="row"><button class="btn sm soft" data-act="moveAll">Move all ${groups.overdue.length} to today</button><button class="btn sm" data-act="moveAllTmr">Push all to tomorrow</button><button class="btn sm" data-act="undateAll">Remove all their dates</button></div>` : ''}
     ${body}${f === 'done' && archived ? `<p class="small muted">${archived} older completed tasks are archived. They're included when you export.</p>` : ''}</section>`;
 }
 
@@ -1268,7 +1274,7 @@ function vGamsat() {
         <div class="field"><span class="lab">Default weekly goal when no section goals are set (h)</span><input type="number" min="0" max="80" class="in" style="width:100px" value="${g.weekTarget}" data-ch="gTarget"></div>
         <button class="link" data-act="logStudy" style="align-self:flex-start">+ Log time studied without the timer</button></section>
       <section class="card flat"><div class="chead"><h3>Study to-dos</h3><span class="lab">${td.filter(t => t.done).length}/${td.length} today</span></div>
-        ${od.length ? `<div class="carry"><div class="chead"><span class="over">${od.length} overdue</span><button class="link" data-act="moveAllG">Move to today</button></div><ul class="tasks">${od.map(t => taskRow(t)).join('')}</ul></div>` : ''}
+        ${od.length ? `<div class="carry"><div class="chead"><span class="over">${od.length} overdue</span><span class="row" style="gap:12px"><button class="link" data-act="moveAllG">Move to today</button><button class="link" data-act="undateAll" data-g="1">Remove dates</button></span></div><ul class="tasks">${od.map(t => taskRow(t)).join('')}</ul></div>` : ''}
         <ul class="tasks">${td.map(t => taskRow(t)).join('') || '<li class="empty">Nothing set for today.</li>'}</ul>
         ${(() => { const ed = errDue(addDays(T, 7)); const now = ed.filter(x => x.due <= T), soon = ed.filter(x => x.due > T); return ed.length ? `<span class="lab">Retries &amp; drills${now.length ? ` · ${now.length} due` : ''}</span><ul class="tasks">${now.map(errItem).join('')}${soon.map(errItem).join('')}</ul>` : ''; })()}
         ${up.length ? `<span class="lab">Next 7 days</span><ul class="tasks">${up.map(t => taskRow(t, { date: true })).join('')}</ul>` : ''}
@@ -2502,7 +2508,7 @@ function taskSheet(id) {
   const opt = (o, v) => Object.entries(o).map(([k, l]) => `<option value="${k}" ${String(v) === k ? 'selected' : ''}>${l}</option>`).join('');
   openSheet(sheetHead('Task', t.ex ? '<span class="ex">example</span>' : '') + `
     <input class="in" style="font-size:17px" value="${esc(t.title)}" data-ch="tf" data-f="title" data-id="${id}" aria-label="Title">
-    <div class="grid2"><div class="field"><span class="lab">Date</span><input type="date" class="in" value="${t.date || ''}" data-ch="tf" data-f="date" data-id="${id}"></div>
+    <div class="grid2"><div class="field"><span class="lab">Date</span><input type="date" class="in" value="${t.date || ''}" data-ch="tf" data-f="date" data-id="${id}">${t.date ? `<button class="link" style="align-self:flex-start" data-act="taskUndate" data-id="${id}">Remove date (move to No date)</button>` : '<span class="small muted">No date. It waits in “No date” until you pick one.</span>'}</div>
     <div class="field"><span class="lab">List</span>${catSelect(t.cat, `data-ch="tf" data-f="cat" data-id="${id}"`)}</div>
     <div class="field" style="grid-column:1/-1"><span class="lab">Due by (optional)</span><div class="row"><input type="date" class="in" style="flex:0 1 170px" value="${t.due || ''}" data-ch="tf" data-f="due" data-id="${id}"><label class="row small"><input type="checkbox" ${t.due && t.due === addDays(mondayOf(today()), 6) ? 'checked' : ''} data-ch="dueWeek" data-id="${id}"> End of this week</label></div><span class="small muted">The deadline, separate from the day you plan to do it. With no date set, it turns overdue once this passes.</span></div>
     <div class="field"><span class="lab">GAMSAT section</span><select class="in" data-ch="tf" data-f="sec" data-id="${id}">${opt({ '': 'None', S1: 'S1 · Humanities', S2: 'S2 · Writing', S3: 'S3 · Sciences' }, t.sec)}</select></div>
@@ -2709,6 +2715,9 @@ const ACT = {
   addChunk: el => addTaskFrom('chunk-add', null, { force: { projectId: el.dataset.id, cat: (S.core.projects.find(p => p.id === el.dataset.id) || {}).cat || '' } }),
   addG: () => { const sec = val('g-sec'); addTaskFrom('g-add', today(), { force: { cat: gamsatCat() ? gamsatCat().id : '', ...(sec ? { sec } : {}) } }); },
   orphanDel: () => withUndo('Deleted tasks from removed lists', ['tasks'], () => { const o = new Set(orphans()); S.tasks.list = S.tasks.list.filter(t => !o.has(t)); UI.taskFilter = 'overdue'; commit('tasks'); }),
+  taskUndate: el => { const t = S.tasks.list.find(x => x.id === el.dataset.id); if (!t) return; const old = t.date; withUndo(`Date removed (was ${fmtShort(old)}). It's in “No date” now`, ['tasks', dayKey(old)], () => { undate(t); touch('tasks'); }); taskSheet(t.id); render(); },
+  undateAll: el => { const list = overdue().filter(t => t.date && (!el.dataset.g || isGamsat(t))); if (!list.length) return; const keys = [...new Set(['tasks', ...list.map(t => dayKey(t.date))])];
+    withUndo(`${list.length} task${list.length > 1 ? 's' : ''} moved to “No date”`, keys, () => { list.forEach(undate); commit('tasks'); }); },
   moveAll: () => withUndo('Moved to today', ['tasks'], () => { for (const t of overdue()) t.date = today(); commit('tasks'); }),
   moveAllTmr: () => withUndo('Pushed to tomorrow', ['tasks'], () => { const tm = addDays(today(), 1); for (const t of overdue()) t.date = tm; commit('tasks'); }),
   moveAllG: () => withUndo('Moved to today', ['tasks'], () => { for (const t of overdue().filter(isGamsat)) t.date = today(); commit('tasks'); }),
